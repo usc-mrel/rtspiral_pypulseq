@@ -58,9 +58,74 @@ tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]
     v = (1/eta)*(L*s+R*gT)
     return k, g, s, m1, m2, t, v
 
-def plotgradinfo():
+def plotgradinfo(g, T: float = 4e-6):
+    k, g, s, m1, m2, t, v = calcgradinfo(g, T)
+    tms = t*1e3
 
-    return
+    fig, axs = plt.subplots(2, 3)
+    axs[0, 0].plot(k[:,0], k[:,1])
+    axs[0, 0].set_title('k-Space Trajectory')
+
+    axs[0, 0].spines['top'].set_color('none')
+    axs[0, 0].spines['bottom'].set_position('zero')
+    axs[0, 0].spines['left'].set_position('zero')
+    axs[0, 0].spines['right'].set_color('none')
+    axs[0, 0].set(aspect='equal')
+
+    axs[0, 0].set_xlabel('$k_x [m^{-1}]$', loc='left')
+    axs[0, 0].set_ylabel('$k_y [m^{-1}]$', loc='top')
+
+    axs[0, 1].plot(tms, k[:,0], label='k_x')
+    axs[0, 1].plot(tms, k[:,1], label='k_y')
+    axs[0, 1].plot(tms, np.sqrt(k[:,0]*k[:,0] + k[:,1]*k[:,1]), '--', label='|k|')
+    axs[0, 1].set_title('k-Space vs. Time')
+    axs[0, 1].set_xlabel('Time [ms]')
+    axs[0, 1].set_ylabel('k-Space position [$m^{-1}$]')
+    axs[0, 1].legend()
+    axs[0, 1].grid(True)
+
+    axs[0, 2].plot(tms, g[:,0], label='$G_x$')
+    axs[0, 2].plot(tms, g[:,1], label='$G_y$')
+    axs[0, 2].plot(tms, np.sqrt(g[:,0]*g[:,0] + g[:,1]*g[:,1]), '--', label='|G|')
+
+    axs[0, 2].set_title('Gradient vs. Time')
+    axs[0, 2].set_xlabel('Time [ms]')
+    axs[0, 2].set_ylabel('Amplitude [mT/m]')
+    axs[0, 2].legend()
+    axs[0, 2].grid(True)
+
+    axs[1, 0].plot(tms, s[:,0], label='$S_x$')
+    axs[1, 0].plot(tms, s[:,1], label='$S_y$')
+    axs[1, 0].plot(tms, np.sqrt(s[:,0]*s[:,0] + s[:,1]*s[:,1]), '--', label='|S|')
+
+    axs[1, 0].set_title('Slew Rate vs. Time')
+    axs[1, 0].set_xlabel('Time [ms]')
+    axs[1, 0].set_ylabel('Slew Rate [T/m/s]')
+    axs[1, 0].legend()
+    axs[1, 0].grid(True)
+
+    axs[1, 1].plot(tms, m1[:,0], label='$M1_x$')
+    axs[1, 1].plot(tms, m1[:,1], label='$M1_y$')
+    axs[1, 1].plot(tms, np.sqrt(m1[:,0]*m1[:,0] + m1[:,1]*m1[:,1]), '--', label='|M1|')
+
+    axs[1, 1].set_title('1st Moment vs. Time')
+    axs[1, 1].set_xlabel('Time [ms]')
+    axs[1, 1].set_ylabel('1st Moment [s/m]')
+    axs[1, 1].legend()
+    axs[1, 1].grid(True)
+
+    axs[1, 2].plot(tms, m2[:,0], label='$M2_x$')
+    axs[1, 2].plot(tms, m2[:,1], label='$M2_y$')
+    axs[1, 2].plot(tms, np.sqrt(m2[:,0]*m2[:,0] + m2[:,1]*m2[:,1]), '--', label='|M2|')
+
+    axs[1, 2].set_title('2nd Moment vs. Time')
+    axs[1, 2].set_xlabel('Time [ms]')
+    axs[1, 2].set_ylabel('2nd Moment [$s^2$/m]')
+    axs[1, 2].legend()
+    axs[1, 2].ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+    axs[1, 2].grid(True)
+
+    return fig
 
 def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
     """ Given the system parameters, number of interleaves, FoV, resolution and Readout time, designs the variable density spiral.
@@ -199,23 +264,17 @@ if __name__ == "__main__":
 
     k, g, s, t = vds_design(sys, Nint, fov, res, Tread)
 
-    plt.figure()
-    plt.plot(t*1e3, g)
-    plt.xlabel('Time [ms]')
-    plt.ylabel('Grad Amp [mT/m]')
-    plt.title('VDS Design output')
+    fig = plotgradinfo(g, sys['Tdwell'])
+    fig.suptitle('VDS Design output', fontsize=16)
+
+    plt.show()
 
     # Test the fixed ro function
 
     k2, g2, t2, nint2 = vds_fixed_ro(sys, fov, res, Tread)
-
-    plt.figure()
-    plt.plot(t2*1e3, g2)
-    plt.xlabel('Time [ms]')
-    plt.ylabel('Grad Amp [mT/m]')
-    plt.title('VDS fixed ro output')
+    fig = plotgradinfo(g2, sys['Tdwell'])
+    fig.suptitle('VDS fixed RO output', fontsize=16)
 
     plt.show()
-
 
     pass
