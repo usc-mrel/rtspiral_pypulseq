@@ -1,11 +1,48 @@
+
 from _vds.lib import calc_vds
 from _vds import ffi
-
 import numpy as np
+import numpy.typing as npt
 from math import exp, log, ceil
 
+def calcgradinfo(g: npt.ArrayLike, T: float = 4e-6, k0: float = 0, R: float = 0.35, L: float = 0.0014, eta: float = 17.86e-3):
+    '''	Function calculates gradient information
 
-def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> np.array:
+	INPUT:
+		g	gradient (G/cm) = gx + i*gy
+		T	sample period (s)
+		k0	initial condition for k-space.
+		R	coil resistance (ohms, default =.35)
+		L	coil inductance (H, default = .0014)
+		eta	coil efficiency (G/cm/A, default = 1/56)
+
+	OUTPUT:
+		k	k-space trajectory (cm^(-1))
+		g	gradient (G/cm)
+		s	slew rate trajectory (G/cm/s)
+		m1	first moment trajectory (s/cm)
+		m2	second moment trajectory (s^2/cm)
+		t	vector of time points (s)
+		v	voltage across coil.
+
+
+	B.Hargreaves, Aug 2002.
+    Adopted to Python by: Bilal Tasdelen 2023'''
+
+    gamma = 4258
+    sz = g.shape
+    lg = max(sz)
+    k = k0 + np.cumsum(g)*gamma*T
+    t = (np.arange(1, lg+1)-0.5)*T
+    tt = t*np.ones((lg, 1))
+    s = np.concatenate((g, np.reshape(g[-1,:], (1, 2)))) - np.concatenate(([[0, 0]], g))
+    s = s[1:,:]/T
+    m1 = np.cumsum(g.T.dot(tt), axis=1)*gamma*T
+    m2 = np.cumsum(g.T.dot(tt.dot(tt)+T**2/12))*gamma*T
+    v = (1/eta)*(L*s+R*g)
+    return k, g, s, m1, m2, t, v
+
+def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> npt.ArrayLike:
 
 
     slewmax = sys['max_slew']*100
@@ -53,8 +90,9 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> np.
     g = np.column_stack([Gx,Gy])*10 # [G/cm] -> [mT/m]
 
     g = np.concatenate((np.zeros((1, 2)), g))
-    return g
+    k, g, s, m1, m2, time, v = calcgradinfo(g, Td)
 
+    return k, g, s, time
 
 def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[np.array, int]:
     vds_design(sys, Nint, fov, res, Tread)
@@ -74,11 +112,11 @@ if __name__ == "__main__":
 
     Nint = 19
     fov  = [25.6] # [cm]
-    res = 2 # [mm]
+    res = 4 # [mm]
     Tread = 3e-3
 
-    g = vds_design(sys, Nint, fov, res, Tread)
+    k, g, s, t = vds_design(sys, Nint, fov, res, Tread)
 
-    plt.plot(g)
+    plt.plot(t*1e3, g)
     plt.show()
     pass
