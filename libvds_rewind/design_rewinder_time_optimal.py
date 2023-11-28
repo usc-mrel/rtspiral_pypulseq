@@ -2,10 +2,10 @@ import numpy as np
 from scipy.optimize import minimize_scalar, minimize, NonlinearConstraint
 
 from .rounding import round_to_GRT, round_up_to_GRT
-from .trap_moments import trap_moment, trap_moment_exact_time, trap_moment_lims, mconst
+from .trap_moments import trap_moment, trap_moment_lims
 
 
-def design_rewinder2(Gs, Ge, M, sys):
+def design_rewinder_time_optimal(Gs, Ge, M, sys):
 # PK: work in progress. This function is not working yet.
 
 #DESIGNREWINDER Given moment, start, end gradients and system limits, design a trapezoid.
@@ -41,7 +41,7 @@ def design_rewinder2(Gs, Ge, M, sys):
     max_slew = sys['max_slew'] * slew_scale
 
     SR = max_slew * 0.99
-    dT = sys['Tdwell']
+    dT = sys['adc_dwell']
 
     tscale = 1
     gscale = 1. / max_grad
@@ -66,8 +66,9 @@ def design_rewinder2(Gs, Ge, M, sys):
 
     if abs(gM) < abs(M) or step2:
         obj2 = lambda x: abs(x[1])
-        lb = [-max_grad * gscale, dT * tscale]
-        ub = [max_grad * gscale, Tpud * tscale]
+
+        bound_grad = [-max_grad * gscale, max_grad * gscale]
+        bound_time = [dT * tscale, Tpud * tscale]
 
         options = {'disp': False}
         xtol = 1e-7
@@ -83,17 +84,18 @@ def design_rewinder2(Gs, Ge, M, sys):
         x0 = [g0 * gscale, Tp0 * tscale]
         x = x0
 
+
         niter = 0
         while (eps / dcy) > area_tol:
             niter += 1
-            mc = lambda x: mconst([x[0] / gscale, x[1] / tscale], M, SR, dT, Gs, Ge, eps)
+            mc = lambda x: mconst([x[0] / gscale, x[1] / tscale], M, SR, dT, Gs, Ge, 0)
             nlc = NonlinearConstraint(mc, -xtol, xtol)
             #constraints = {'type': 'eq', 'fun': mc}
 
-            minimization = minimize(obj2, x0, bounds=tuple([[lb[i], ub[i]] for i in range(len(lb))]), constraints=[nlc], tol=xtol, options=options)
+            minimization = minimize(obj2, x0, bounds=tuple([bound_grad, bound_time]), constraints=[nlc], tol=xtol, options=options)
             x = minimization.x
 
-            if minimization.nit == 25:
+            if minimization.success == False:
                 # We are in an infeasible region. Let's try resetting the problem.
                 print('infeas')
                 x[0] = x[0] / 2  # Half the gradient, hopefully enough to reset.
@@ -134,5 +136,7 @@ def design_rewinder2(Gs, Ge, M, sys):
 
     return times, amplitudes
 
-
+def mconst(x, Md, SR, dT, Gs, Ge, eps):
+    Mrw = trap_moment_lims(x[0], x[1], SR, dT, Gs, Ge)
+    return (Md - Mrw)**2 - eps
 

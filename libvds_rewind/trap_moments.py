@@ -20,6 +20,3 @@ def trap_moment_lims(Gp, Tp, SR, dT, Gs, Ge):
     return trap_moment(Gp, Tru, Tp, Trd, Gs, Ge)
 
 
-def mconst(x, Md, SR, dT, Gs, Ge, eps):
-    Mrw = trap_moment_lims(x[0], x[1], SR, dT, Gs, Ge)
-    return (Md - Mrw)**2 - eps
