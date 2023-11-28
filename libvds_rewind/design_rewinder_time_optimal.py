@@ -78,30 +78,27 @@ def design_rewinder_time_optimal(Gs, Ge, M, sys):
             g0 = g0 * 0.98
             Tp0 = round_to_GRT((M - trap_moment_lims(g0, 0, SR, dT, Gs, Ge)) / g0, GRT=dT)
 
-        dcy = 0.9
-        eps = dcy * (M - trap_moment_lims(g0, Tp0, SR, dT, Gs, Ge))**2
+        eps = (M - trap_moment_lims(g0, Tp0, SR, dT, Gs, Ge))**2
 
         x0 = [g0 * gscale, Tp0 * tscale]
         x = x0
 
 
         niter = 0
-        while (eps / dcy) > area_tol:
+        while eps > area_tol:
             niter += 1
             mc = lambda x: mconst([x[0] / gscale, x[1] / tscale], M, SR, dT, Gs, Ge, 0)
             nlc = NonlinearConstraint(mc, -xtol, xtol)
-            #constraints = {'type': 'eq', 'fun': mc}
 
             minimization = minimize(obj2, x0, bounds=tuple([bound_grad, bound_time]), constraints=[nlc], tol=xtol, options=options)
             x = minimization.x
 
             if minimization.success == False:
                 # We are in an infeasible region. Let's try resetting the problem.
-                print('infeas')
                 x[0] = x[0] / 2  # Half the gradient, hopefully enough to reset.
                 x[1] = round_to_GRT((M - trap_moment_lims(x[0] / gscale, 0, SR, dT, Gs, Ge)) / (x[0] / gscale), GRT=dT) * tscale
 
-            eps = dcy * (M - trap_moment_lims(x[0] / gscale, x[1] / tscale, SR, dT, Gs, Ge))**2
+            eps = (M - trap_moment_lims(x[0] / gscale, x[1] / tscale, SR, dT, Gs, Ge))**2
             x0 = x
 
             if niter == max_iter:
