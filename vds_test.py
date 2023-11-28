@@ -1,5 +1,6 @@
 from libvds.vds import vds_design
 import matplotlib.pyplot as plt
+from libvds.vds import plotgradinfo
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 
@@ -34,13 +35,8 @@ if len(g_rewind_x) > len(g_rewind_y):
 else:
     g_rewind_x = np.concatenate((g_rewind_x, np.zeros(len(g_rewind_y) - len(g_rewind_x))))
 
+
 # concatenate g and g_rewind, and plot.
 g = np.concatenate((g, np.stack([g_rewind_x, g_rewind_y]).T))
-t = np.arange(0, len(g)) * sys['adc_dwell']
-plt.plot(t*1e3, g)
-plt.show()
-
-# plot k-space trajectory.
-k = np.cumsum(g, axis=0) * sys['adc_dwell'] * sys['os']
-plt.plot(k[:, 0], k[:, 1])
+plotgradinfo(g, sys['adc_dwell'])
 plt.show()
