@@ -1,6 +1,6 @@
 from libvds.vds import vds_design
 import matplotlib.pyplot as plt
-from libvds_rewind.design_rewinder import design_rewinder_exact_time
+from libvds_rewind.design_rewinder import design_rewinder_exact_time, design_rewinder
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 
 import numpy as np
@@ -34,11 +34,18 @@ if len(g_rewind_x) > len(g_rewind_y):
 else:
     g_rewind_x = np.concatenate((g_rewind_x, np.zeros(len(g_rewind_y) - len(g_rewind_x))))
 
+# add one extra zero to both g_rewind_x and g_rewind_y
+g_rewind_x = np.concatenate((g_rewind_x, np.zeros(1)))
+g_rewind_y = np.concatenate((g_rewind_y, np.zeros(1)))
+
 # concatenate g and g_rewind, and plot.
 g = np.concatenate((g, np.stack([g_rewind_x, g_rewind_y]).T))
 t = np.arange(0, len(g)) * sys['Tdwell']
 plt.plot(t*1e3, g)
 plt.show()
+
+
+print('total moment of the rewinder: ', np.cumsum(g,axis=0)[-1,:]*sys['Tdwell'])
 
 # plot k-space trajectory.
 k = np.cumsum(g, axis=0) * sys['Tdwell'] * sys['os']
