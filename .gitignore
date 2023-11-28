@@ -1,4 +1,5 @@
 rtspiral_env
 .venv
 **/__pycache__/
-config.toml.vscode
+config.toml
+.vscode

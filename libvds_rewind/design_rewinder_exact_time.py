@@ -1,17 +1,17 @@
 import numpy as np
-from scipy.optimize import minimize_scalar, minimize, NonlinearConstraint
+from scipy.optimize import minimize_scalar
 
 from .rounding import round_to_GRT, round_up_to_GRT
 from .trap_moments import trap_moment, trap_moment_exact_time 
 
-def design_rewinder_exact_time(Gs, Ge, T, M, sys):
-    #DESIGNREWINDER Given moment, start, end gradients and system limits, design a trapezoid.
+def design_rewinder_exact_time(Gs, Ge, T, M, spiral_sys):
+    #DESIGNREWINDER Given moment, start, end gradients and spiral_system limits, design a trapezoid.
     # Gs: Starting gradient (mT/m)
     # Ge: Ending gradient (mT/m)
     # M: Desired moment (s.mT/m)
     # T: Total rewinder time (s)
 
-    # sys: struct with following fields;
+    # spiral_sys: struct with following fields;
     #    area_tol: Moment error tolerance (MSE sense)
     #    max_grad: Max gradient amplitude (mT/m)
     #    max_slew: Max gradient slew rate (T/m/s)
@@ -23,16 +23,16 @@ def design_rewinder_exact_time(Gs, Ge, T, M, sys):
     Ge = Ge * grad_scale
     M = M * grad_scale
 
-    max_grad = sys['max_grad'] * grad_scale
-    max_slew = sys['max_slew'] * slew_scale
+    max_grad = spiral_sys['max_grad'] * grad_scale
+    max_slew = spiral_sys['max_slew'] * slew_scale
 
-    if 'area_tol' in sys:
-        area_tol = sys['area_tol']  # (MSE)
+    if 'area_tol' in spiral_sys:
+        area_tol = spiral_sys['area_tol']  # (MSE)
     else:
         area_tol = 1e-5
 
     SR = max_slew * 0.99  # otherwise we run into rounding errors during resampling
-    dT = sys['adc_dwell']
+    dT = spiral_sys['adc_dwell']
 
     # Set up the optimization.
     gscale = 1.0 / (max_grad)
