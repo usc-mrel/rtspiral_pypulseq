@@ -1,0 +1,7 @@
+max_grad          =     13 # [mT/m]
+max_slew          =     35 # [T/m/s]
+grad_raster_time  =  10e-6 # [s]
+rf_raster_time    =   1e-6 # [s]
+rf_ringdown_time  =  10e-6 # [s]
+rf_dead_time      = 100e-6 # [s]
+adc_dead_time     =  10e-6 # [s]

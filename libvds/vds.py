@@ -3,31 +3,48 @@ from _vds.lib import calc_vds
 from _vds import ffi
 import numpy as np
 import numpy.typing as npt
-from math import exp, log, ceil
+from math import exp, log, ceil, sqrt
 
-def calcgradinfo(g: npt.ArrayLike, T: float = 4e-6, k0: float = 0, R: float = 0.35, L: float = 0.0014, eta: float = 1.7857e-4):
-    '''	Function calculates gradient information
+def calcgradinfo(g: npt.ArrayLike, T: float = 4e-6, k0: float = 0, R: float = 0.35, L: float = 0.0014, eta: float = 1.7857e-4) -> \
+tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
+    """	Function calculates gradient information
 
-	INPUT:
-		g	gradient (mT/m) = [gx, gy]
-		T	sample period (s)
-		k0	initial condition for k-space.
-		R	coil resistance (ohms, default =.35)
-		L	coil inductance (H, default = .0014)
-		eta	coil efficiency (G/cm/A, default = 1/56)
+	Parameters
+    ----------
+    g : ArrayLike
+        gradient (mT/m) = [gx, gy]
+    T : float
+        sample period (s)
+    k0 : float
+        initial condition for k-space.
+    R : float
+        coil resistance (ohms, default =.35)
+    L : float
+        coil inductance (H, default = .0014)
+    eta : float
+        coil efficiency (G/cm/A, default = 1/56)
 
-	OUTPUT:
-		k	k-space trajectory (m^(-1))
-		g	gradient (mT/m)
-		s	slew rate trajectory (T/m/s)
-		m1	first moment trajectory (s/m)
-		m2	second moment trajectory (s^2/m)
-		t	vector of time points (s)
-		v	voltage across coil.
+	Returns
+    -------
+    k : ArrayLike
+        k-space trajectory (m^(-1))
+    g : ArrayLike
+        gradient (mT/m)
+    s : ArrayLike
+        slew rate trajectory (T/m/s)
+    m1 : ArrayLike
+        first moment trajectory (s/m)
+    m2 : ArrayLike
+        second moment trajectory (s^2/m)
+    t : ArrayLike
+        vector of time points (s)
+    v : ArrayLike
+        voltage across coil.
 
 
 	B.Hargreaves, Aug 2002.
-    Adopted to Python by: Bilal Tasdelen 2023'''
+    Adopted to Python by: Bilal Tasdelen 2023
+    """
 
     gamma = 42.58e6 # [Hz/T]
     gT = g*1e-3 # [mT/m] -> [T/m]
@@ -41,12 +58,111 @@ def calcgradinfo(g: npt.ArrayLike, T: float = 4e-6, k0: float = 0, R: float = 0.
     v = (1/eta)*(L*s+R*gT)
     return k, g, s, m1, m2, t, v
 
-def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> npt.ArrayLike:
+def plotgradinfo(g, T: float = 4e-6):
+    import matplotlib.pyplot as plt
 
+    k, g, s, m1, m2, t, v = calcgradinfo(g, T)
+    tms = t*1e3
+
+    fig, axs = plt.subplots(2, 3)
+    axs[0, 0].plot(k[:,0], k[:,1])
+    axs[0, 0].set_title('k-Space Trajectory')
+
+    axs[0, 0].spines['top'].set_color('none')
+    axs[0, 0].spines['bottom'].set_position('zero')
+    axs[0, 0].spines['left'].set_position('zero')
+    axs[0, 0].spines['right'].set_color('none')
+    axs[0, 0].set(aspect='equal')
+
+    axs[0, 0].set_xlabel('$k_x [m^{-1}]$', loc='left')
+    axs[0, 0].set_ylabel('$k_y [m^{-1}]$', loc='top')
+
+    axs[0, 1].plot(tms, k[:,0], label='k_x')
+    axs[0, 1].plot(tms, k[:,1], label='k_y')
+    axs[0, 1].plot(tms, np.sqrt(k[:,0]*k[:,0] + k[:,1]*k[:,1]), '--', label='|k|')
+    axs[0, 1].set_title('k-Space vs. Time')
+    axs[0, 1].set_xlabel('Time [ms]')
+    axs[0, 1].set_ylabel('k-Space position [$m^{-1}$]')
+    axs[0, 1].legend()
+    axs[0, 1].grid(True)
+
+    axs[0, 2].plot(tms, g[:,0], label='$G_x$')
+    axs[0, 2].plot(tms, g[:,1], label='$G_y$')
+    axs[0, 2].plot(tms, np.sqrt(g[:,0]*g[:,0] + g[:,1]*g[:,1]), '--', label='|G|')
+
+    axs[0, 2].set_title('Gradient vs. Time')
+    axs[0, 2].set_xlabel('Time [ms]')
+    axs[0, 2].set_ylabel('Amplitude [mT/m]')
+    axs[0, 2].legend()
+    axs[0, 2].grid(True)
+
+    axs[1, 0].plot(tms, s[:,0], label='$S_x$')
+    axs[1, 0].plot(tms, s[:,1], label='$S_y$')
+    axs[1, 0].plot(tms, np.sqrt(s[:,0]*s[:,0] + s[:,1]*s[:,1]), '--', label='|S|')
+
+    axs[1, 0].set_title('Slew Rate vs. Time')
+    axs[1, 0].set_xlabel('Time [ms]')
+    axs[1, 0].set_ylabel('Slew Rate [T/m/s]')
+    axs[1, 0].legend()
+    axs[1, 0].grid(True)
+
+    axs[1, 1].plot(tms, m1[:,0], label='$M1_x$')
+    axs[1, 1].plot(tms, m1[:,1], label='$M1_y$')
+    axs[1, 1].plot(tms, np.sqrt(m1[:,0]*m1[:,0] + m1[:,1]*m1[:,1]), '--', label='|M1|')
+
+    axs[1, 1].set_title('1st Moment vs. Time')
+    axs[1, 1].set_xlabel('Time [ms]')
+    axs[1, 1].set_ylabel('1st Moment [s/m]')
+    axs[1, 1].legend()
+    axs[1, 1].grid(True)
+
+    axs[1, 2].plot(tms, m2[:,0], label='$M2_x$')
+    axs[1, 2].plot(tms, m2[:,1], label='$M2_y$')
+    axs[1, 2].plot(tms, np.sqrt(m2[:,0]*m2[:,0] + m2[:,1]*m2[:,1]), '--', label='|M2|')
+
+    axs[1, 2].set_title('2nd Moment vs. Time')
+    axs[1, 2].set_xlabel('Time [ms]')
+    axs[1, 2].set_ylabel('2nd Moment [$s^2$/m]')
+    axs[1, 2].legend()
+    axs[1, 2].ticklabel_format(axis='y', style='sci', scilimits=(0,0))
+    axs[1, 2].grid(True)
+
+    return fig
+
+def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
+    """ Given the system parameters, number of interleaves, FoV, resolution and Readout time, designs the variable density spiral.
+
+    Parameters
+    ----------
+    sys : dict
+        Dictionary of given system parameters:
+        max_grad  = Available gradient strength [mT/m]
+        max_slew  = Available slew rate [T/m/s]
+        adc_dwell = Sample (gradient) dwell time [s]
+        os = How much waveform will be oversampled during the design
+    Nint : int
+        Number of interleaves
+    fov : list
+        List of FoVs to be supported [cm].
+    res : float
+        Resolution target [mm].
+    Tread : float
+        Maximum readout length [s].
+    Returns
+    -------
+    k : ArrayLike
+        Designed trajectory [mm^-1].
+    g : ArrayLike
+        Designed grad waveform [mT/m].
+    s : ArrayLike
+        Slew rate of the trajectory [T/m/s].
+    time : ArrayLike
+        Time axis [s].
+    """
 
     slewmax = sys['max_slew']*100
     gradmax = sys['max_grad']/10
-    Td = sys['Tdwell']
+    Td = sys['adc_dwell']
     oversamp = sys['os']
 
     Tg = Td/oversamp;	# gradient rate.
@@ -93,20 +209,56 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> npt
 
     return k, g, s, time
 
-def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[np.array, int]:
-    vds_design(sys, Nint, fov, res, Tread)
+def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, int]:
+    """vds_fixed_ro Sweeps vdsmex until N interleaves found that satisfies desired res.
+
+    Parameters
+    ----------
+    sys : dict
+        Contains the system specs for the design, 'max_slew', 'max_grad', 'Tdwell', 'os'
+    FOV : list
+        Desired Field of View(s) [cm]
+    res : float
+        Desired resolution [mm]
+    Tread : float 
+        Desired readout length [s] (RO Duration = Npoints*Ts)
+
+    Returns
+    -------
+    k : ArrayLike
+        Designed k-space trajectory [m^-1]
+    g : ArrayLike
+        Designed gradient waveform [mT/m]
+    time : ArrayLike
+        Time axis [s]
+    nint : int
+        Number of interleaves that supports unalised FoV with the desired resolution.
+    """
+
+    tol = 0.99
+    krmax_target = 1/(2*res*1e-3) # m^-1
+    krmax = 0
+    nint = 0
+    while krmax < krmax_target*tol:
+        nint = nint+1
+        k,g,_,time = vds_design(sys, nint, fov, res, Tread)
+        krmax = sqrt(k[-1,0]*k[-1,0] + k[-1,1]*k[-1,1])
+    
+    return k, g, time, nint
+
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     sys = {
-        'max_slew':  170,  # [T/m/s] 
-        'max_grad':   38,  # [mT/m] 
-        'Tdwell'  : 1e-6, # [s]
-        'os'      :    8
+        'max_slew'  :  170,  # [T/m/s] 
+        'max_grad'  :   38,  # [mT/m] 
+        'adc_dwell' : 1e-6, # [s]
+        'os'        :    8
         }
 
+    # Test the vds_design function directly
     Nint = 19
     fov  = [25.6] # [cm]
     res = 2 # [mm]
@@ -114,6 +266,17 @@ if __name__ == "__main__":
 
     k, g, s, t = vds_design(sys, Nint, fov, res, Tread)
 
-    plt.plot(t*1e3, g)
+    fig = plotgradinfo(g, sys['adc_dwell'])
+    fig.suptitle('VDS Design output', fontsize=16)
+
     plt.show()
+
+    # Test the fixed ro function
+
+    k2, g2, t2, nint2 = vds_fixed_ro(sys, fov, res, Tread)
+    fig = plotgradinfo(g2, sys['adc_dwell'])
+    fig.suptitle('VDS fixed RO output', fontsize=16)
+
+    plt.show()
+
     pass
