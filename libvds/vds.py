@@ -59,6 +59,8 @@ tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]
     return k, g, s, m1, m2, t, v
 
 def plotgradinfo(g, T: float = 4e-6):
+    import matplotlib.pyplot as plt
+
     k, g, s, m1, m2, t, v = calcgradinfo(g, T)
     tms = t*1e3
 
@@ -134,9 +136,9 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tup
     ----------
     sys : dict
         Dictionary of given system parameters:
-        max_grad = Available gradient strength [mT/m]
-        max_slew = Available slew rate [T/m/s]
-        Tdwell = Sample (gradient) dwell time [s]
+        max_grad  = Available gradient strength [mT/m]
+        max_slew  = Available slew rate [T/m/s]
+        adc_dwell = Sample (gradient) dwell time [s]
         os = How much waveform will be oversampled during the design
     Nint : int
         Number of interleaves
@@ -160,7 +162,7 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tup
 
     slewmax = sys['max_slew']*100
     gradmax = sys['max_grad']/10
-    Td = sys['Tdwell']
+    Td = sys['adc_dwell']
     oversamp = sys['os']
 
     Tg = Td/oversamp;	# gradient rate.
@@ -250,10 +252,10 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     sys = {
-        'max_slew':  170,  # [T/m/s] 
-        'max_grad':   38,  # [mT/m] 
-        'Tdwell'  : 1e-6, # [s]
-        'os'      :    8
+        'max_slew'  :  170,  # [T/m/s] 
+        'max_grad'  :   38,  # [mT/m] 
+        'adc_dwell' : 1e-6, # [s]
+        'os'        :    8
         }
 
     # Test the vds_design function directly
@@ -264,7 +266,7 @@ if __name__ == "__main__":
 
     k, g, s, t = vds_design(sys, Nint, fov, res, Tread)
 
-    fig = plotgradinfo(g, sys['Tdwell'])
+    fig = plotgradinfo(g, sys['adc_dwell'])
     fig.suptitle('VDS Design output', fontsize=16)
 
     plt.show()
@@ -272,7 +274,7 @@ if __name__ == "__main__":
     # Test the fixed ro function
 
     k2, g2, t2, nint2 = vds_fixed_ro(sys, fov, res, Tread)
-    fig = plotgradinfo(g2, sys['Tdwell'])
+    fig = plotgradinfo(g2, sys['adc_dwell'])
     fig.suptitle('VDS fixed RO output', fontsize=16)
 
     plt.show()

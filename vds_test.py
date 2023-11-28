@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 
 
 sys = {
-    'max_slew':  170,  # [T/m/s] 
-    'max_grad':   38,  # [mT/m] 
-    'Tdwell'  : 1e-6, # [s]
-    'os'      :    8
+    'max_slew'  :  170,  # [T/m/s] 
+    'max_grad'  :   38,  # [mT/m] 
+    'adc_dwell' : 1e-6, # [s]
+    'os'        :    8
     }
 
 Nint = 19
