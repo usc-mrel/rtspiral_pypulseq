@@ -21,12 +21,12 @@ k, g, s, t = vds_design(sys, Nint, fov, res, Tread)
 
 # === design rewinder ===
 # calculate moment of each gradient for rewinder M0-nulled.
-M = np.cumsum(g, axis=0) * sys['Tdwell']
+M = np.cumsum(g, axis=0) * sys['adc_dwell']
 [times_x, amplitudes_x] = design_rewinder_exact_time(g[-1, 0], 0, 1e-3, -M[-1,0], sys)
 [times_y, amplitudes_y] = design_rewinder_exact_time(g[-1, 1], 0, 1e-3, -M[-1,1], sys)
 
-g_rewind_x = pts_to_waveform(times_x, amplitudes_x, sys['Tdwell'])
-g_rewind_y = pts_to_waveform(times_y, amplitudes_y, sys['Tdwell'])
+g_rewind_x = pts_to_waveform(times_x, amplitudes_x, sys['adc_dwell'])
+g_rewind_y = pts_to_waveform(times_y, amplitudes_y, sys['adc_dwell'])
 
 # add zeros to the end of g_rewind_x or g_rewind_y to make them the same length (in case they are not).
 if len(g_rewind_x) > len(g_rewind_y):
@@ -36,11 +36,11 @@ else:
 
 # concatenate g and g_rewind, and plot.
 g = np.concatenate((g, np.stack([g_rewind_x, g_rewind_y]).T))
-t = np.arange(0, len(g)) * sys['Tdwell']
+t = np.arange(0, len(g)) * sys['adc_dwell']
 plt.plot(t*1e3, g)
 plt.show()
 
 # plot k-space trajectory.
-k = np.cumsum(g, axis=0) * sys['Tdwell'] * sys['os']
+k = np.cumsum(g, axis=0) * sys['adc_dwell'] * sys['os']
 plt.plot(k[:, 0], k[:, 1])
 plt.show()

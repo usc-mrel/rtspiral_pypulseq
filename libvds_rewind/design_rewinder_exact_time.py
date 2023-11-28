@@ -32,7 +32,7 @@ def design_rewinder_exact_time(Gs, Ge, T, M, sys):
         area_tol = 1e-5
 
     SR = max_slew * 0.99  # otherwise we run into rounding errors during resampling
-    dT = sys['Tdwell']
+    dT = sys['adc_dwell']
 
     # Set up the optimization.
     gscale = 1.0 / (max_grad)
@@ -43,7 +43,7 @@ def design_rewinder_exact_time(Gs, Ge, T, M, sys):
 
     # Iterate flat top time upper bound till we find a reasonable tradeoff between duration and precision.
     obj2 = lambda x: (M - trap_moment_exact_time(x / gscale, T, SR, dT, Gs, Ge))**2
-    result = minimize_scalar(obj2, bounds=(lb, ub), method='bounded', options = {'disp': True, 'maxiter': 1000})
+    result = minimize_scalar(obj2, bounds=(lb, ub), method='bounded', options = {'disp': False, 'maxiter': 1000})
     Gp = result.x / gscale
 
     # Get results and derive other points from it.
@@ -54,7 +54,6 @@ def design_rewinder_exact_time(Gs, Ge, T, M, sys):
     # Validate if the result is still reasonable after roundings
     ga1 = trap_moment(Gp, Tr, Tp, Tf, Gs, Ge)
     err = (M - ga1)**2
-    print(M / grad_scale)
     if err > area_tol:
         print(f'Optimization yielded larger than tolerated error.\nTolerance={area_tol}, error={err}')
 
