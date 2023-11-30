@@ -15,6 +15,7 @@ def design_rewinder_exact_time(Gs, Ge, T, M, spiral_sys):
     #    area_tol: Moment error tolerance (MSE sense)
     #    max_grad: Max gradient amplitude (mT/m)
     #    max_slew: Max gradient slew rate (T/m/s)
+    #    grad_raster_time: Gradient raster time [s]
 
     # convert grad to Hz/m and slew to Hz/m/s
     grad_scale = 42.58e3 # from mT/m -> Hz/m
@@ -32,7 +33,7 @@ def design_rewinder_exact_time(Gs, Ge, T, M, spiral_sys):
         area_tol = 1e-5
 
     SR = max_slew * 0.99  # otherwise we run into rounding errors during resampling
-    dT = spiral_sys['adc_dwell']
+    dT = spiral_sys['grad_raster_time']
 
     # Set up the optimization.
     gscale = 1.0 / (max_grad)

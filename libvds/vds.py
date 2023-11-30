@@ -51,8 +51,7 @@ tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]
     k = k0 + np.cumsum(gT, axis=0)*gamma*T
     t = (np.arange(1, g.shape[0]+1)-0.5)*T
     tt = (t*np.ones((2, 1))).T
-    s = np.concatenate((g, np.reshape(g[-1,:], (1, 2)))) - np.concatenate(([[0, 0]], g))
-    s = s[1:,:]/T/1e3 # [mT/m/s] -> [T/m/s]
+    s = np.diff(np.concatenate(([[0, 0]], g, g[None, -1,:])), axis=0)[1:,:]/T/1e3 # [mT/m/s] -> [T/m/s]
     m1 = np.cumsum(gT*tt, axis=0)*gamma*T
     m2 = np.cumsum(gT*(tt*tt+T**2/12), axis=0)*gamma*T
     v = (1/eta)*(L*s+R*gT)
@@ -235,16 +234,29 @@ def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.Ar
         Number of interleaves that supports unalised FoV with the desired resolution.
     """
 
-    tol = 0.99
+    tol = 0.98
     krmax_target = 1/(2*res*1e-3) # m^-1
     krmax = 0
     nint = 0
     while krmax < krmax_target*tol:
         nint = nint+1
         k,g,_,time = vds_design(sys, nint, fov, res, Tread)
+        # print(f'nint={nint}, krmax={krmax}, tread={time[-1]} \n')
         krmax = sqrt(k[-1,0]*k[-1,0] + k[-1,1]*k[-1,1])
     
     return k, g, time, nint
+
+def raster_to_grad(g: npt.ArrayLike, adc_dwell: float, grad_dwell: float) -> tuple[npt.ArrayLike, npt.ArrayLike]:
+    t = (np.arange(1, g.shape[0]+1)-0.5)*adc_dwell
+    t_grad = np.arange(0, np.round(g.shape[0]/(grad_dwell/adc_dwell)))*grad_dwell
+    t = np.concatenate(([0], t))
+    g = np.concatenate(([[0,0]], g), axis=0)
+
+    g_grad = np.empty((t_grad.shape[0], 2))
+    g_grad[:,0] = np.interp(t_grad, t, g[:,0])
+    g_grad[:,1] = np.interp(t_grad, t, g[:,1])
+
+    return t_grad, g_grad
 
 
 

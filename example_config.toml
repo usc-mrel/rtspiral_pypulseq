@@ -20,3 +20,13 @@ adc_dwell   = 1e-6 # [s]
 resolution      = 2     # [mm]
 fov             = 25.6  # [cm]
 slice_thickness = 6     # [mm]
+
+flip_angle      = 100   # [deg]
+rf_duration     = 1e-3  # [s]
+
+[user_settings]
+
+write_seq    = true
+filename_ext = 'debug' # This will be attached to the filename
+show_plots   = true
+detailed_rep = true

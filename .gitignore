@@ -3,3 +3,4 @@ rtspiral_env
 **/__pycache__/
 config.toml
 .vscode
+out_seq/
