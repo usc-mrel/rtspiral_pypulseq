@@ -41,7 +41,6 @@ res   =  params['acquisition']['resolution'] # [mm]
 Tread =  params['spiral']['ro_duration'] # [s]
 
 
-
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
 
@@ -86,38 +85,43 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
 gzrr = copy.deepcopy(gzr)
 gzrr.amplitude = -gzr.amplitude
 
-# Readout
+# ADC
+ndiscard = 10 # Number of samples to discard from beginning
+num_samples = np.floor(Tread/spiral_sys['adc_dwell']) + ndiscard
+adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=system)
 
-gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0], system=system)
+discard_delay_t = ndiscard*spiral_sys['adc_dwell'] # [s] Time to delay grads.
+
+# Readout gradients
+
+gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0], delay=discard_delay_t, system=system)
 gsp_x.first = 0
 gsp_x.last = 0
 
-gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1], system=system)
+gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1], delay=discard_delay_t, system=system)
 gsp_y.first = 0
 gsp_y.last = 0
 
 # gsprew_x = make_extended_trapezoid(channel='x', amplitudes=amplitudes_x, times=times_x, system=system)
 # gsprew_y = make_extended_trapezoid(channel='y', amplitudes=amplitudes_y, times=times_y, system=system)
 
-# ADC
-num_samples = np.floor(Tread/spiral_sys['adc_dwell'])
-adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=system)
+# Set the Slice rewinder balance gradients delay
+
+gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - calc_duration(gzrr)
 
 # Sequence looping
 
 seq = Sequence(system)
 
-seq.add_block(rf, gz)
-seq.add_block(gzr)
+rf.phase_offset = -np.pi
 
-seq.add_block(gsp_x, gsp_y, adc)
-seq.add_block(gzrr)
+for arm_i in range(0,3):
+    rf.phase_offset = -1*rf.phase_offset
+    seq.add_block(rf, gz)
+    seq.add_block(gzr)
 
-seq.add_block(rf, gz)
-seq.add_block(gzr)
+    seq.add_block(gsp_x, gsp_y, adc, gzrr)
 
-seq.add_block(gsp_x, gsp_y, adc)
-seq.add_block(gzrr)
 
 # plt.figure()
 
@@ -132,10 +136,11 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(grad_disp='mT/m', plot_now=True)
+    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=True)
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
+    plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
     # plt.plot(k_traj.T)
     plt.show()
 # 
