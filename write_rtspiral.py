@@ -84,7 +84,7 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 use='excitation', system=system)
 
 gzrr = copy.deepcopy(gzr)
-gzrr.amplitude = -gzr.amplitude
+# gzrr.amplitude = -gzr.amplitude
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
@@ -95,11 +95,11 @@ discard_delay_t = ndiscard*spiral_sys['adc_dwell'] # [s] Time to delay grads.
 
 # Readout gradients
 
-gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0], delay=discard_delay_t, system=system)
+gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0]*42.58e3, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
 gsp_x.first = 0
 gsp_x.last = 0
 
-gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1], delay=discard_delay_t, system=system)
+gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1]*42.58e3, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
 gsp_y.first = 0
 gsp_y.last = 0
 
