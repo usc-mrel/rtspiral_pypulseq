@@ -130,6 +130,7 @@ n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
 
 for arm_i in range(0,n_TRs):
     rf.phase_offset = -1*rf.phase_offset
+    adc.phase_offset = rf.phase_offset
     seq.add_block(rf, gz)
     seq.add_block(gzr)
 
