@@ -7,6 +7,7 @@ from pypulseq.make_extended_trapezoid import make_extended_trapezoid
 from pypulseq.calc_duration import calc_duration
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
+from pypulseq.rotate import rotate
 from utils.load_params import load_params
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
@@ -109,18 +110,30 @@ gsp_y.last = 0
 
 gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - calc_duration(gzrr)
 
+# set the rotations.
+
+gsp_xs = []
+gsp_ys = []
+for i in range(0, n_int):
+    gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
+    gsp_xs.append(gsp_x_rot)
+    gsp_ys.append(gsp_y_rot)
+
 # Sequence looping
 
 seq = Sequence(system)
 
 rf.phase_offset = -np.pi
 
-for arm_i in range(0,3):
+# if n_int is odd, double num TRs because of phase cycling requirements.
+n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
+
+for arm_i in range(0,n_TRs):
     rf.phase_offset = -1*rf.phase_offset
     seq.add_block(rf, gz)
     seq.add_block(gzr)
 
-    seq.add_block(gsp_x, gsp_y, adc, gzrr)
+    seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
 
 
 # plt.figure()
