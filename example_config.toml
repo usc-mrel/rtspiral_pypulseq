@@ -24,6 +24,9 @@ slice_thickness = 6     # [mm]
 flip_angle      = 100   # [deg]
 rf_duration     = 1e-3  # [s]
 
+TR              = 0     # [ms], 0 for min TR
+TE              = 0     # [ms], 0 for min TE
+
 [user_settings]
 
 write_seq    = true
