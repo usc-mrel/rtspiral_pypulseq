@@ -13,6 +13,8 @@ from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 import copy
+from scipy.io import savemat
+from sigpy.mri.dcf import pipe_menon_dcf
 
 # Load and prep system and sequence parameters
 params = load_params('config', './')
@@ -176,3 +178,31 @@ if params['user_settings']['write_seq']:
     import os
     seq_path = os.path.join('out_seq', f'{seq_filename}.seq')
     seq.write(seq_path)  # Save to disk
+
+    # Export k-space trajectory
+    k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
+    Nsample = int(k_traj_adc.shape[1]/n_TRs)
+    kx = k_traj_adc[0,:]
+    ky = k_traj_adc[1,:]
+    k_max = np.max(np.abs(kx + 1j * ky))
+    k = (kx / k_max) + (1j * ky / k_max)
+
+    # calculate density compensation weights using Pipe and Menon's method
+    Nsample = int(k_traj_adc.shape[1]/n_TRs)
+    w = pipe_menon_dcf(k_traj_adc[0:2, :].T)
+    w = w[Nsample+1:2*Nsample+1]
+    w = w / (np.max(w));
+    w[w > 0.4] = 0.4;
+    w = w / np.max(w);   
+    w[int(w.shape[0]*2/3):w.shape[0]] = 1
+    plt.plot(w)
+    plt.show()
+
+    param = {
+        'fov': fov[0],
+        'spatial_resolution': params['acquisition']['resolution'],
+        'repetitions': n_TRs,
+    }
+
+    traj_path = os.path.join('out_trajectory', f'{seq_filename}.mat')
+    savemat(traj_path, {'kx': kx, 'ky': ky, 'w' : w, 'param': param})

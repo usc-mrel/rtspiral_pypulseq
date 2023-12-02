@@ -4,3 +4,4 @@ rtspiral_env
 config.toml
 .vscode
 out_seq/
+out_trajectory
