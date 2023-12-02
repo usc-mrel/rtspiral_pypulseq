@@ -53,9 +53,10 @@ t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # === design rewinder ===
 # calculate moment of each gradient for rewinder M0-nulled.
+T_rew = 1e-3
 M = np.cumsum(g_grad, axis=0) * GRT
-[times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, 1e-3, -M[-1,0], spiral_sys)
-[times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, 1e-3, -M[-1,1], spiral_sys)
+[times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
+[times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
 
 g_rewind_x = pts_to_waveform(times_x, amplitudes_x, GRT)
 g_rewind_y = pts_to_waveform(times_y, amplitudes_y, GRT)
@@ -84,7 +85,6 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 use='excitation', system=system)
 
 gzrr = copy.deepcopy(gzr)
-# gzrr.amplitude = -gzr.amplitude
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
