@@ -142,7 +142,6 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
-
 # if n_int is odd, double num TRs because of phase cycling requirements.
 n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
 
@@ -190,12 +189,13 @@ if params['user_settings']['write_seq']:
     from scipy.signal import medfilt
     from sigpy.mri.dcf import pipe_menon_dcf
 
-    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2])
-    seq.set_definition(key="SliceThickness", value=params['acquisition']['slice_thickness']*1e-3)
+    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
+    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
     seq.set_definition(key="TE", value=params['acquisition']['TE']*1e-3)
     seq.set_definition(key="TR", value=params['acquisition']['TR']*1e-3)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
+    seq.set_definition(key="Resolution_mm", value=res)
 
     seq_filename = f"spiral_bssfp_{params['user_settings']['filename_ext']}"
     seq_path = os.path.join('out_seq', f'{seq_filename}.seq')
@@ -227,11 +227,13 @@ if params['user_settings']['write_seq']:
         plt.title('DCF')
         plt.show()
 
-    param = {
+    meta = {
         'fov': fov[0],
         'spatial_resolution': params['acquisition']['resolution'],
         'repetitions': n_TRs,
+        'matrix_size': [fov[0]*10/res, fov[0]*10/res],
+        'pre_discard': ndiscard
     }
 
-    traj_path = os.path.join('out_trajectory', f'{seq_filename}.mat')
-    savemat(traj_path, {'kx': kx, 'ky': ky, 'w' : w, 'param': param})
+    traj_path = os.path.join('out_trajectory', f'{seq.signature_value}.mat')
+    savemat(traj_path, {'kx': kx, 'ky': ky, 'w' : w, 'param': meta})
