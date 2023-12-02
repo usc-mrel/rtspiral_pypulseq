@@ -193,8 +193,8 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2])
     seq.set_definition(key="SliceThickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
-    # seq.set_definition(key="TE", value=TE)
-    # seq.set_definition(key="TR", value=TR)
+    seq.set_definition(key="TE", value=params['acquisition']['TE']*1e-3)
+    seq.set_definition(key="TR", value=params['acquisition']['TR']*1e-3)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
 
     seq_filename = f"spiral_bssfp_{params['user_settings']['filename_ext']}"
