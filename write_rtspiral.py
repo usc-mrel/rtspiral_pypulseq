@@ -4,7 +4,9 @@ from pypulseq import Opts
 from pypulseq.make_sinc_pulse import make_sinc_pulse
 from pypulseq.make_arbitrary_grad import make_arbitrary_grad
 from pypulseq.make_extended_trapezoid import make_extended_trapezoid
+from pypulseq.make_delay import make_delay
 from pypulseq.calc_duration import calc_duration
+from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
 from pypulseq.rotate import rotate
@@ -13,8 +15,6 @@ from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 import copy
-from scipy.io import savemat
-from sigpy.mri.dcf import pipe_menon_dcf
 
 # Load and prep system and sequence parameters
 params = load_params('config', './')
@@ -50,14 +50,13 @@ k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
-# plotgradinfo(g, spiral_sys['adc_dwell'])
-# plotgradinfo(g_grad, GRT)
-# plt.show()
+
 # === design rewinder ===
 # calculate moment of each gradient for rewinder M0-nulled.
+T_rew = 1e-3
 M = np.cumsum(g_grad, axis=0) * GRT
-[times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, 1e-3, -M[-1,0], spiral_sys)
-[times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, 1e-3, -M[-1,1], spiral_sys)
+[times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
+[times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
 
 g_rewind_x = pts_to_waveform(times_x, amplitudes_x, GRT)
 g_rewind_y = pts_to_waveform(times_y, amplitudes_y, GRT)
@@ -71,10 +70,10 @@ else:
 
 # concatenate g and g_rewind, and plot.
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
-plotgradinfo(g_grad, GRT)
-# gro_raster = g[4::10,:] # TODO: Generalize to other adc_dwell?
 
-plt.show()
+if params['user_settings']['show_plots']:
+    plotgradinfo(g_grad, GRT)
+    plt.show()
 
 # Excitation
 
@@ -86,7 +85,6 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 use='excitation', system=system)
 
 gzrr = copy.deepcopy(gzr)
-# gzrr.amplitude = -gzr.amplitude
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
@@ -105,9 +103,6 @@ gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1]*42.58e3, delay=dis
 gsp_y.first = 0
 gsp_y.last = 0
 
-# gsprew_x = make_extended_trapezoid(channel='x', amplitudes=amplitudes_x, times=times_x, system=system)
-# gsprew_y = make_extended_trapezoid(channel='y', amplitudes=amplitudes_y, times=times_y, system=system)
-
 # Set the Slice rewinder balance gradients delay
 
 gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - calc_duration(gzrr)
@@ -121,10 +116,31 @@ for i in range(0, n_int):
     gsp_xs.append(gsp_x_rot)
     gsp_ys.append(gsp_y_rot)
 
+# Set the delays
+
+# TE 
+if params['acquisition']['TE'] == 0:
+    TEd = 0
+    TE = calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay
+    print(f'Min TE is set: {TE*1e3:.3f} ms.')
+else:
+    TEd = params['acquisition']['TE']*1e-3 - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
+    assert TEd >= 0, "Required TE can not be achieved."
+
+# TR
+if params['acquisition']['TR'] == 0:
+    TRd = 0
+    TR = calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr)
+    print(f'Min TR is set: {TR*1e3:.3f} ms.')
+else:
+    TRd = params['acquisition']['TR']*1e-3 - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
+    assert TRd >= 0, "Required TE can not be achieved."
+
+TE_delay = make_delay(TEd)
+TR_delay = make_delay(TRd)
 # Sequence looping
 
 seq = Sequence(system)
-
 
 # if n_int is odd, double num TRs because of phase cycling requirements.
 n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
@@ -134,11 +150,9 @@ for arm_i in range(0,n_TRs):
     adc.phase_offset = rf.phase_offset
     seq.add_block(rf, gz)
     seq.add_block(gzr)
-
+    seq.add_block(TE_delay)
     seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
-
-
-# plt.figure()
+    seq.add_block(TR_delay)
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -151,14 +165,16 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=True)
+    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False)
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
     plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
-    # plt.plot(k_traj.T)
+    plt.xlabel('$k_x [mm^{-1}]$')
+    plt.ylabel('$k_y [mm^{-1}]$')
+    plt.title('k-Space Trajectory')
     plt.show()
-# 
+ 
 # Detailed report if requested
 if params['user_settings']['detailed_rep']:
     print("\n===== Detailed Test Report =====\n")
@@ -167,42 +183,25 @@ if params['user_settings']['detailed_rep']:
 
 # Write the sequence to file
 if params['user_settings']['write_seq']:
-    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2])
-    seq.set_definition(key="SliceThickness", value=params['acquisition']['slice_thickness']*1e-3)
+
+    import os
+    from utils.traj_utils import save_traj_dcf
+
+    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
+    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
-    # seq.set_definition(key="TE", value=TE)
-    # seq.set_definition(key="TR", value=TR)
+    seq.set_definition(key="TE", value=params['acquisition']['TE']*1e-3)
+    seq.set_definition(key="TR", value=params['acquisition']['TR']*1e-3)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
+    seq.set_definition(key="Resolution_mm", value=res)
 
     seq_filename = f"spiral_bssfp_{params['user_settings']['filename_ext']}"
-    import os
     seq_path = os.path.join('out_seq', f'{seq_filename}.seq')
     seq.write(seq_path)  # Save to disk
 
     # Export k-space trajectory
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
-    Nsample = int(k_traj_adc.shape[1]/n_TRs)
-    kx = k_traj_adc[0,:]
-    ky = k_traj_adc[1,:]
-    k_max = np.max(np.abs(kx + 1j * ky))
-    k = (kx / k_max) + (1j * ky / k_max)
 
-    # calculate density compensation weights using Pipe and Menon's method
-    Nsample = int(k_traj_adc.shape[1]/n_TRs)
-    w = pipe_menon_dcf(k_traj_adc[0:2, :].T)
-    w = w[Nsample+1:2*Nsample+1]
-    w = w / (np.max(w));
-    w[w > 0.4] = 0.4;
-    w = w / np.max(w);   
-    w[int(w.shape[0]*2/3):w.shape[0]] = 1
-    plt.plot(w)
-    plt.show()
-
-    param = {
-        'fov': fov[0],
-        'spatial_resolution': params['acquisition']['resolution'],
-        'repetitions': n_TRs,
-    }
-
-    traj_path = os.path.join('out_trajectory', f'{seq_filename}.mat')
-    savemat(traj_path, {'kx': kx, 'ky': ky, 'w' : w, 'param': param})
+    save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, fov, res, ndiscard, params['user_settings']['show_plots'])
+    print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
+    
