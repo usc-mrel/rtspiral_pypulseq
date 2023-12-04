@@ -6,15 +6,22 @@ import os
 
 def save_traj_dcf(filename, k_traj_adc, n_TRs, fov, res, ndiscard, show_plots=True):
     Nsample = int(k_traj_adc.shape[1]/n_TRs)
+    Nsample2 = Nsample-ndiscard
     kx = k_traj_adc[0,:]
     ky = k_traj_adc[1,:]
-    k_max = np.max(np.abs(kx + 1j * ky))
-    k = (kx / k_max) + (1j * ky / k_max)
+    kx = np.reshape(kx, (Nsample, -1))
+    ky = np.reshape(ky, (Nsample, -1))
+    kx = kx[ndiscard:,:]
+    ky = ky[ndiscard:,:]
+    k = np.concatenate((np.reshape(kx, ((Nsample2)*n_TRs, 1)), np.reshape(ky, ((Nsample2)*n_TRs, 1))), axis=1)
+    # k_max = np.max(np.abs(kx + 1j * ky))
+    # k = (kx / k_max) + (1j * ky / k_max)
 
     # calculate density compensation weights using Pipe and Menon's method
-    Nsample = int(k_traj_adc.shape[1]/n_TRs)
-    w = pipe_menon_dcf(k_traj_adc[0:2, :].T, max_iter=30)
-    w = w[Nsample+1:2*Nsample+1]
+    # w = pipe_menon_dcf(k_traj_adc[0:2, :].T, max_iter=30)
+    w = pipe_menon_dcf(k, max_iter=30)
+
+    w = w[Nsample2+1:2*Nsample2+1]
     w = w / (np.max(w))
     w[w > 0.4] = 0.4
     w = w / np.max(w)
