@@ -161,7 +161,7 @@ if params['user_settings']['show_plots']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
-    plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
+    # plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
     # plt.plot(k_traj.T)
     plt.show()
 # 
@@ -180,7 +180,7 @@ if params['user_settings']['write_seq']:
     # seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
 
-    seq_filename = f"spiral_bssfp_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_bssfp_tagging_{params['user_settings']['filename_ext']}"
     import os
     seq_path = os.path.join('out_seq', f'{seq_filename}.seq')
     seq.write(seq_path)  # Save to disk
