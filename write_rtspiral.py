@@ -124,7 +124,8 @@ if params['acquisition']['TE'] == 0:
     TE = calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay
     print(f'Min TE is set: {TE*1e3:.3f} ms.')
 else:
-    TEd = params['acquisition']['TE']*1e-3 - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
+    TE = params['acquisition']['TE']*1e-3
+    TEd = TE - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
     assert TEd >= 0, "Required TE can not be achieved."
 
 # TR
@@ -133,7 +134,8 @@ if params['acquisition']['TR'] == 0:
     TR = calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr)
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
 else:
-    TRd = params['acquisition']['TR']*1e-3 - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
+    TR = params['acquisition']['TR']*1e-3
+    TRd = TR - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
     assert TRd >= 0, "Required TE can not be achieved."
 
 TE_delay = make_delay(TEd)
@@ -190,8 +192,8 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
     seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
-    seq.set_definition(key="TE", value=params['acquisition']['TE']*1e-3)
-    seq.set_definition(key="TR", value=params['acquisition']['TR']*1e-3)
+    seq.set_definition(key="TE", value=TE)
+    seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
