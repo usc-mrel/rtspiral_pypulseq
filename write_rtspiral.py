@@ -202,6 +202,6 @@ if params['user_settings']['write_seq']:
     # Export k-space trajectory
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
-    save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, fov, res, ndiscard, params['user_settings']['show_plots'])
+    save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
     
