@@ -4,7 +4,7 @@ from sigpy.mri.dcf import pipe_menon_dcf
 import numpy as np
 import os
 
-def save_traj_dcf(filename, k_traj_adc, n_TRs, fov, res: float, ndiscard, show_plots=True):
+def save_traj_dcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float, ndiscard, show_plots=True):
     Nsample = int(k_traj_adc.shape[1]/n_TRs)
     Nsample2 = Nsample-ndiscard
     kx = k_traj_adc[0,:]
@@ -18,7 +18,7 @@ def save_traj_dcf(filename, k_traj_adc, n_TRs, fov, res: float, ndiscard, show_p
     # k = (kx / k_max) + (1j * ky / k_max)
 
     # calculate density compensation weights using Pipe and Menon's method
-    w = pipe_menon_dcf(k_traj_adc[0:2, :].T, max_iter=30)
+    w = pipe_menon_dcf(k_traj_adc[0:2, 0:(Nsample2*n_int)].T, max_iter=100)
     # w = pipe_menon_dcf(k, max_iter=30)
 
     w = w[Nsample+1:2*Nsample+1]
@@ -42,6 +42,7 @@ def save_traj_dcf(filename, k_traj_adc, n_TRs, fov, res: float, ndiscard, show_p
         'fov': fov[0],
         'spatial_resolution': float(res),
         'repetitions': n_TRs,
+        'interleaves': n_int,
         'matrix_size': [fov[0]*10/res, fov[0]*10/res],
         'pre_discard': ndiscard
     }

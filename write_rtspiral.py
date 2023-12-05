@@ -14,6 +14,7 @@ from utils.load_params import load_params
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
+from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 import copy
 
 # Load and prep system and sequence parameters
@@ -123,6 +124,7 @@ if params['acquisition']['TE'] == 0:
     TEd = 0
     TE = calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay
     print(f'Min TE is set: {TE*1e3:.3f} ms.')
+    params['acquisition']['TE'] = TE
 else:
     TEd = params['acquisition']['TE']*1e-3 - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
     assert TEd >= 0, "Required TE can not be achieved."
@@ -132,6 +134,7 @@ if params['acquisition']['TR'] == 0:
     TRd = 0
     TR = calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr)
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
+    params['acquisition']['TR'] = TR
 else:
     TRd = params['acquisition']['TR']*1e-3 - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
     assert TRd >= 0, "Required TE can not be achieved."
@@ -142,8 +145,11 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
+# handle any preparation pulses.
+kernel_handle_preparations(seq, params, system)
+
 # if n_int is odd, double num TRs because of phase cycling requirements.
-n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
+n_TRs = n_int * params['acquisition']['repetitions']
 
 for arm_i in range(0,n_TRs):
     rf.phase_offset = np.pi*np.mod(arm_i, 2)
@@ -153,6 +159,9 @@ for arm_i in range(0,n_TRs):
     seq.add_block(TE_delay)
     seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
     seq.add_block(TR_delay)
+
+# handle any end_preparation pulses.
+kernel_handle_end_preparations(seq, params, system)
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -165,7 +174,7 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False)
+    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms')
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
