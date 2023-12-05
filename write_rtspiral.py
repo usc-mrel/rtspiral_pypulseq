@@ -111,10 +111,26 @@ gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - calc_duration(gzrr)
 
 gsp_xs = []
 gsp_ys = []
-for i in range(0, n_int):
-    gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
-    gsp_xs.append(gsp_x_rot)
-    gsp_ys.append(gsp_y_rot)
+print(f"Spiral arm ordering is {params['spiral']['arm_ordering']}.")
+if params['spiral']['arm_ordering'] == 'linear':
+    for i in range(0, n_int):
+        gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
+        gsp_xs.append(gsp_x_rot)
+        gsp_ys.append(gsp_y_rot)
+
+    # if n_int is odd, double num TRs because of phase cycling requirements.
+    n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
+elif params['spiral']['arm_ordering'] == 'ga':
+    n_TRs = params['spiral']['GA_steps']
+    ang = 0
+    for i in range(0, n_TRs):
+        gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
+        gsp_xs.append(gsp_x_rot)
+        gsp_ys.append(gsp_y_rot)
+        ang += 111.25*np.pi/180
+        
+else:
+    raise Exception("Unknown arm ordering") 
 
 # Set the delays
 
@@ -144,8 +160,6 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
-# if n_int is odd, double num TRs because of phase cycling requirements.
-n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
 
 for arm_i in range(0,n_TRs):
     rf.phase_offset = np.pi*np.mod(arm_i, 2)
