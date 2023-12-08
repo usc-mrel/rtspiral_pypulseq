@@ -114,10 +114,26 @@ gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - calc_duration(gzrr)
 
 gsp_xs = []
 gsp_ys = []
-for i in range(0, n_int):
-    gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
-    gsp_xs.append(gsp_x_rot)
-    gsp_ys.append(gsp_y_rot)
+print(f"Spiral arm ordering is {params['spiral']['arm_ordering']}.")
+if params['spiral']['arm_ordering'] == 'linear':
+    for i in range(0, n_int):
+        gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
+        gsp_xs.append(gsp_x_rot)
+        gsp_ys.append(gsp_y_rot)
+
+    # if n_int is odd, double num TRs because of phase cycling requirements.
+    n_TRs = n_int * params['acquisition']['repetitions']
+elif params['spiral']['arm_ordering'] == 'ga':
+    n_TRs = params['spiral']['GA_steps'] * params['acquisition']['repetitions']
+    ang = 0
+    for i in range(0, n_TRs):
+        gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
+        gsp_xs.append(gsp_x_rot)
+        gsp_ys.append(gsp_y_rot)
+        ang += 111.25*np.pi/180
+        
+else:
+    raise Exception("Unknown arm ordering") 
 
 # Set the delays
 
@@ -128,7 +144,8 @@ if params['acquisition']['TE'] == 0:
     print(f'Min TE is set: {TE*1e3:.3f} ms.')
     params['acquisition']['TE'] = TE
 else:
-    TEd = params['acquisition']['TE']*1e-3 - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
+    TE = params['acquisition']['TE']*1e-3
+    TEd = TE - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
     assert TEd >= 0, "Required TE can not be achieved."
 
 # TR
@@ -138,7 +155,8 @@ if params['acquisition']['TR'] == 0:
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
     params['acquisition']['TR'] = TR
 else:
-    TRd = params['acquisition']['TR']*1e-3 - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
+    TR = params['acquisition']['TR']*1e-3
+    TRd = TR - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
     assert TRd >= 0, "Required TE can not be achieved."
 
 TE_delay = make_delay(TEd)
@@ -155,8 +173,7 @@ seq.add_block(trigger)
 # handle any preparation pulses.
 kernel_handle_preparations(seq, params, system)
 
-# if n_int is odd, double num TRs because of phase cycling requirements.
-n_TRs = n_int * params['acquisition']['repetitions']
+
 
 # tagging pulse pre-prep
 if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
@@ -185,7 +202,10 @@ for arm_i in range(0,n_TRs):
     seq.add_block(rf, gz)
     seq.add_block(gzr)
     seq.add_block(TE_delay)
-    seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
+    if params['spiral']['arm_ordering'] == 'ga':
+        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc, gzrr) 
+    else:
+        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
@@ -206,7 +226,7 @@ if params['user_settings']['show_plots']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
-    plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
+    #plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
     plt.xlabel('$k_x [mm^{-1}]$')
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
@@ -227,8 +247,8 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
     seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
-    seq.set_definition(key="TE", value=params['acquisition']['TE']*1e-3)
-    seq.set_definition(key="TR", value=params['acquisition']['TR']*1e-3)
+    seq.set_definition(key="TE", value=TE)
+    seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
