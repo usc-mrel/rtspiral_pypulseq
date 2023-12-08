@@ -9,8 +9,10 @@ from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
+from pypulseq.make_trigger import make_trigger
 from pypulseq.rotate import rotate
 from utils.load_params import load_params
+from utils.calculate_ramp_ibrahim import calculate_ramp_ibrahim
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
@@ -145,13 +147,39 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
+# first time: try trigger
+trigger = make_trigger('physio1', duration=2000e-6, system=system)
+
+seq.add_block(trigger)
+
 # handle any preparation pulses.
 kernel_handle_preparations(seq, params, system)
 
 # if n_int is odd, double num TRs because of phase cycling requirements.
 n_TRs = n_int * params['acquisition']['repetitions']
 
+# tagging pulse pre-prep
+if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
+    T1 = params['acquisition']['options']['T1'] * 1e-3
+    TR = params['acquisition']['TR']
+    rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, TR, np.deg2rad(params['acquisition']['flip_angle']))
+
+    # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
+    rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
+
+params['flip_angle_last'] = np.deg2rad(params['acquisition']['flip_angle'])
+
 for arm_i in range(0,n_TRs):
+    if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
+        # re-make the sinc pulse with the new flip angle, but ensure same duration.
+        rf, _, _ = make_sinc_pulse(flip_angle=rf_amplitudes[arm_i], 
+                                duration=params['acquisition']['rf_duration'],
+                                slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
+                                time_bw_product=2,
+                                return_gz=True,
+                                use='excitation', system=system) 
+        params['flip_angle_last'] = rf_amplitudes[arm_i]
+
     rf.phase_offset = np.pi*np.mod(arm_i, 2)
     adc.phase_offset = rf.phase_offset
     seq.add_block(rf, gz)

@@ -5,10 +5,11 @@ from pypulseq.calc_duration import calc_duration
 from libvds_rewind.rounding import round_up_to_GRT
 import numpy as np
 
-def kernel_rf(seq, prep_param, params, system):
+def kernel_rf(seq, prep_param, params, system, flip_angle=None):
     phase_offset = np.deg2rad(prep_param['phase'])
 
-    flip_angle = prep_param['rf_scale']*params['acquisition']['flip_angle']/180*np.pi
+    if flip_angle is None:
+        flip_angle = prep_param['rf_scale']*params['acquisition']['flip_angle']/180*np.pi
   
     rf, gz, gzr = make_sinc_pulse(flip_angle=flip_angle, 
                                 duration=params['acquisition']['rf_duration'],

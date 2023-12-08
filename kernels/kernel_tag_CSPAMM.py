@@ -2,7 +2,7 @@ from pypulseq import make_block_pulse, make_trapezoid
 import numpy as np
 
 
-def kernel_tag_CSPAMM(seq, system):
+def kernel_tag_CSPAMM(seq, prep_param, params, system):
     RF_1_x = make_block_pulse(np.deg2rad(22.5), delay=0, time_bw_product=2, duration=1e-3,system=system)
     RF_2_x = make_block_pulse(np.deg2rad(67.5), delay=0, time_bw_product=2, duration=1e-3,system=system)
 
