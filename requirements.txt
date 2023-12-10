@@ -15,3 +15,5 @@ six==1.16.0
 sigpy==0.1.26
 pypulseq @ git+https://github.com/imr-framework/pypulseq@dev
 tomli >= 1.1.0 ; python_version < "3.11"
+torch # for MrzeroCore
+requests # for MrzeroCore
