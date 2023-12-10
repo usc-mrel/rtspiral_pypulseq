@@ -212,7 +212,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="Resolution_mm", value=res)
 
     seq_filename = f"spiral_bssfp_{params['user_settings']['filename_ext']}"
-    seq_path = os.path.join('out_seq', f'{seq_filename}.seq')
+    seq_path = os.path.join('out_seq', f"{seq_filename}_{params['spiral']['arm_ordering']}.seq")
     seq.write(seq_path)  # Save to disk
 
     # Export k-space trajectory
