@@ -130,7 +130,7 @@ elif params['spiral']['arm_ordering'] == 'ga':
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
-        ang += 111.25*np.pi/180
+        ang += params['spiral']['GA_angle']*np.pi/180
         
 else:
     raise Exception("Unknown arm ordering") 
@@ -250,8 +250,8 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
-    seq_filename = f"spiral_bssfp_{params['user_settings']['filename_ext']}"
-    seq_path = os.path.join('out_seq', f'{seq_filename}.seq')
+    seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_{params['user_settings']['filename_ext']}"
+    seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk
 
     # Export k-space trajectory
