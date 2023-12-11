@@ -23,7 +23,7 @@ def save_traj_dcf(filename, k_traj_adc, n_TRs, fov, res: float, ndiscard, show_p
 
     w = w[Nsample+1:2*Nsample+1]
     w = w / (np.max(w))
-    w[w > 0.4] = 0.4
+    w[w > 0.1] = 0.1
     w = w / np.max(w)
     w[int(w.shape[0]*2/3):w.shape[0]] = 1
     w = medfilt(w, 11)

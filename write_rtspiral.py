@@ -122,13 +122,17 @@ if params['spiral']['arm_ordering'] == 'linear':
     n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
 elif params['spiral']['arm_ordering'] == 'ga':
     n_TRs = params['spiral']['GA_steps']
+    n_int = n_TRs
     ang = 0
     for i in range(0, n_TRs):
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
         ang += params['spiral']['GA_angle']*np.pi/180
-        
+        ang = ang % (2*np.pi)
+        # print(f"Deg: {ang*180/np.pi}")
+    n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
+
 else:
     raise Exception("Unknown arm ordering") 
 
@@ -185,7 +189,7 @@ if params['user_settings']['show_plots']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
-    plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
+    plt.plot(k_traj_adc[0,:], k_traj_adc[1,:])
     plt.xlabel('$k_x [mm^{-1}]$')
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
@@ -211,7 +215,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
-    seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
     seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk
 
