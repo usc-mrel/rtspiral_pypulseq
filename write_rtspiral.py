@@ -122,16 +122,18 @@ if params['spiral']['arm_ordering'] == 'linear':
         gsp_ys.append(gsp_y_rot)
     n_TRs = n_int * params['acquisition']['repetitions']
 elif params['spiral']['arm_ordering'] == 'ga':
-    # hack the n_int to be GAsteps instead. This is because it is needed in the reconstruction.
-    n_int = params['spiral']['GA_steps']
-    n_TRs = params['spiral']['GA_steps'] * params['acquisition']['repetitions']
+    n_TRs = params['spiral']['GA_steps']
+    n_int = n_TRs
     ang = 0
     for i in range(0, n_TRs):
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
         ang += params['spiral']['GA_angle']*np.pi/180
-        
+        ang = ang % (2*np.pi)
+        # print(f"Deg: {ang*180/np.pi}")
+    n_TRs = n_int * params['acquisition']['repetitions']
+
 else:
     raise Exception("Unknown arm ordering") 
 
@@ -165,13 +167,8 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
-# first time: try trigger
-trigger = make_trigger('physio1', duration=2000e-6, system=system)
-
-seq.add_block(trigger)
-
 # handle any preparation pulses.
-kernel_handle_preparations(seq, params, system)
+prep_str = kernel_handle_preparations(seq, params, system)
 
 # tagging pulse pre-prep
 if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
@@ -182,6 +179,7 @@ if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
     # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
     rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
 
+# useful for end_peparation pulses.
 params['flip_angle_last'] = np.deg2rad(params['acquisition']['flip_angle'])
 
 for arm_i in range(0,n_TRs):
@@ -207,7 +205,7 @@ for arm_i in range(0,n_TRs):
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
-kernel_handle_end_preparations(seq, params, system)
+end_prep_str = kernel_handle_end_preparations(seq, params, system)
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -250,7 +248,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
-    seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_bssfp_prep_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
     seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk
 
