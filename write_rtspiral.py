@@ -120,10 +120,10 @@ if params['spiral']['arm_ordering'] == 'linear':
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
-
-    # if n_int is odd, double num TRs because of phase cycling requirements.
     n_TRs = n_int * params['acquisition']['repetitions']
 elif params['spiral']['arm_ordering'] == 'ga':
+    # hack the n_int to be GAsteps instead. This is because it is needed in the reconstruction.
+    n_int = params['spiral']['GA_steps']
     n_TRs = params['spiral']['GA_steps'] * params['acquisition']['repetitions']
     ang = 0
     for i in range(0, n_TRs):
@@ -172,8 +172,6 @@ seq.add_block(trigger)
 
 # handle any preparation pulses.
 kernel_handle_preparations(seq, params, system)
-
-
 
 # tagging pulse pre-prep
 if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
