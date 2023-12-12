@@ -9,11 +9,14 @@ from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
+from pypulseq.make_trigger import make_trigger
 from pypulseq.rotate import rotate
 from utils.load_params import load_params
+from utils.calculate_ramp_ibrahim import calculate_ramp_ibrahim
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
+from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 import copy
 
 # Load and prep system and sequence parameters
@@ -117,9 +120,7 @@ if params['spiral']['arm_ordering'] == 'linear':
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
-
-    # if n_int is odd, double num TRs because of phase cycling requirements.
-    n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
+    n_TRs = n_int * params['acquisition']['repetitions']
 elif params['spiral']['arm_ordering'] == 'ga':
     n_TRs = params['spiral']['GA_steps']
     n_int = n_TRs
@@ -131,7 +132,7 @@ elif params['spiral']['arm_ordering'] == 'ga':
         ang += params['spiral']['GA_angle']*np.pi/180
         ang = ang % (2*np.pi)
         # print(f"Deg: {ang*180/np.pi}")
-    n_TRs = n_int if n_int % 2 == 0 else 2 * n_int
+    n_TRs = n_int * params['acquisition']['repetitions']
 
 else:
     raise Exception("Unknown arm ordering") 
@@ -143,6 +144,7 @@ if params['acquisition']['TE'] == 0:
     TEd = 0
     TE = calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay
     print(f'Min TE is set: {TE*1e3:.3f} ms.')
+    params['acquisition']['TE'] = TE
 else:
     TE = params['acquisition']['TE']*1e-3
     TEd = TE - (calc_duration(rf, gz) - calc_rf_center(rf)[0] - gz.fall_time + calc_duration(gzr) + gsp_x.delay)
@@ -153,6 +155,7 @@ if params['acquisition']['TR'] == 0:
     TRd = 0
     TR = calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr)
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
+    params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
     TRd = TR - (calc_duration(rf, gz) + calc_duration(gzr) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc, gzrr))
@@ -164,15 +167,45 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
+# handle any preparation pulses.
+prep_str = kernel_handle_preparations(seq, params, system)
+
+# tagging pulse pre-prep
+if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
+    T1 = params['acquisition']['options']['T1'] * 1e-3
+    TR = params['acquisition']['TR']
+    rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, TR, np.deg2rad(params['acquisition']['flip_angle']))
+
+    # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
+    rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
+
+# useful for end_peparation pulses.
+params['flip_angle_last'] = np.deg2rad(params['acquisition']['flip_angle'])
 
 for arm_i in range(0,n_TRs):
+    if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
+        # re-make the sinc pulse with the new flip angle, but ensure same duration.
+        rf, _, _ = make_sinc_pulse(flip_angle=rf_amplitudes[arm_i], 
+                                duration=params['acquisition']['rf_duration'],
+                                slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
+                                time_bw_product=2,
+                                return_gz=True,
+                                use='excitation', system=system) 
+        params['flip_angle_last'] = rf_amplitudes[arm_i]
+
     rf.phase_offset = np.pi*np.mod(arm_i, 2)
     adc.phase_offset = rf.phase_offset
     seq.add_block(rf, gz)
     seq.add_block(gzr)
     seq.add_block(TE_delay)
-    seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
+    if params['spiral']['arm_ordering'] == 'ga':
+        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc, gzrr) 
+    else:
+        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
     seq.add_block(TR_delay)
+
+# handle any end_preparation pulses.
+end_prep_str = kernel_handle_end_preparations(seq, params, system)
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -185,11 +218,11 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False)
+    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms')
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
-    plt.plot(k_traj_adc[0,:], k_traj_adc[1,:])
+    #plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
     plt.xlabel('$k_x [mm^{-1}]$')
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
@@ -215,13 +248,13 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
-    seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_bssfp_prep_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
     seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk
 
     # Export k-space trajectory
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
-    save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, fov, res, ndiscard, params['user_settings']['show_plots'])
+    save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
     
