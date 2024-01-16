@@ -97,7 +97,6 @@ adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=syste
 discard_delay_t = ndiscard*spiral_sys['adc_dwell'] # [s] Time to delay grads.
 
 # Readout gradients
-
 gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0]*42.58e3, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
 gsp_x.first = 0
 gsp_x.last = 0
@@ -168,34 +167,37 @@ TR_delay = make_delay(TRd)
 seq = Sequence(system)
 
 # handle any preparation pulses.
-prep_str = kernel_handle_preparations(seq, params, system)
+prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gz, gzr=gzr)
 
-# tagging pulse pre-prep
-if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
-    T1 = params['acquisition']['options']['T1'] * 1e-3
-    TR = params['acquisition']['TR']
-    rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, TR, np.deg2rad(params['acquisition']['flip_angle']))
-
-    # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
-    rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
+FA_schedule_str = ''
 
 # useful for end_peparation pulses.
-params['flip_angle_last'] = np.deg2rad(params['acquisition']['flip_angle'])
+params['flip_angle_last'] = params['acquisition']['flip_angle']
+
+# tagging pulse pre-prep (only if fa_schedule exists)
+if 'fa_schedule' in params['acquisition']:
+    if params['acquisition']['fa_schedule'][0]['type'] == "ramp_ibrahim":
+        if params['acquisition']['fa_schedule'][0]['enabled'] == True:
+            T1 = params['acquisition']['fa_schedule'][0]['T1'] * 1e-3
+            T2 = params['acquisition']['fa_schedule'][0]['T2'] * 1e-3
+            TR = params['acquisition']['TR']
+            rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, T2, TR, np.deg2rad(params['acquisition']['flip_angle']), max_alpha=np.deg2rad(130))
+
+            # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
+            rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
+            params['flip_angle_last'] = np.rad2deg(rf_amplitudes[-1])
+            FA_schedule_str = "ramp_ibrahim"
 
 for arm_i in range(0,n_TRs):
-    if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
-        # re-make the sinc pulse with the new flip angle, but ensure same duration.
-        rf, _, _ = make_sinc_pulse(flip_angle=rf_amplitudes[arm_i], 
-                                duration=params['acquisition']['rf_duration'],
-                                slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
-                                time_bw_product=2,
-                                return_gz=True,
-                                use='excitation', system=system) 
-        params['flip_angle_last'] = rf_amplitudes[arm_i]
+    curr_rf = copy.deepcopy(rf)
 
-    rf.phase_offset = np.pi*np.mod(arm_i, 2)
-    adc.phase_offset = rf.phase_offset
-    seq.add_block(rf, gz)
+    if 'fa_schedule' in params['acquisition']:
+        if params['acquisition']['fa_schedule'][0]['enabled'] == True:
+            curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
+
+    curr_rf.phase_offset = np.pi*np.mod(arm_i, 2)
+    adc.phase_offset = curr_rf.phase_offset
+    seq.add_block(curr_rf, gz)
     seq.add_block(gzr)
     seq.add_block(TE_delay)
     if params['spiral']['arm_ordering'] == 'ga':
@@ -205,7 +207,7 @@ for arm_i in range(0,n_TRs):
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
-end_prep_str = kernel_handle_end_preparations(seq, params, system)
+end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gz, gzr=gzr)
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -218,10 +220,16 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms')
+    seq.plot(show_blocks=False, grad_disp='mT/m', plot_now=False, time_disp='ms')
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
+
+    # make axis suqaure
+    plt.gca().set_aspect('equal', adjustable='box')
+    # double fontsize
+    plt.rcParams.update({'font.size': 14})
+
     #plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
     plt.xlabel('$k_x [mm^{-1}]$')
     plt.ylabel('$k_y [mm^{-1}]$')
@@ -248,7 +256,10 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
 
-    seq_filename = f"spiral_bssfp_prep_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_bssfp_{FA_schedule_str}_prep_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_FA_{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+    # replace multiple "_" with single "_"
+    seq_filename = seq_filename.replace("__", "_")
+
     seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk
 

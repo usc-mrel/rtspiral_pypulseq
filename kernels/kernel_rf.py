@@ -4,24 +4,43 @@ from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.calc_duration import calc_duration
 from libvds_rewind.rounding import round_up_to_GRT
 import numpy as np
+import copy
 
-def kernel_rf(seq, prep_param, params, system, flip_angle=None):
+def kernel_rf(seq, prep_param, params, system, flip_angle=None, rf=None, gz=None, gzr=None):
     phase_offset = np.deg2rad(prep_param['phase'])
 
-    if flip_angle is None:
-        flip_angle = prep_param['rf_scale']*params['acquisition']['flip_angle']/180*np.pi
-  
-    rf, gz, gzr = make_sinc_pulse(flip_angle=flip_angle, 
-                                duration=params['acquisition']['rf_duration'],
-                                slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
-                                time_bw_product=2,
-                                return_gz=True,
-                                phase_offset=phase_offset,
-                                use='excitation', system=system)
+    scale = prep_param['rf_scale']
+    # if scale is negative, use the last flip angle.
+    if scale < 0:
+        fa_last = params["flip_angle_last"]
+        fa = params["acquisition"]["flip_angle"]
+        scale = (fa_last/fa) * np.abs(scale)
+        fa = fa_last
+    else:
+        fa = params["acquisition"]["flip_angle"]
+
+    if rf is None or gz is None or gzr is None:
+        if flip_angle is None:
+            flip_angle = np.abs(scale)*params['acquisition']['flip_angle']/180*np.pi
+        rf, gz, gzr = make_sinc_pulse(flip_angle=flip_angle, 
+                                    duration=params['acquisition']['rf_duration'],
+                                    slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
+                                    time_bw_product=2,
+                                    return_gz=True,
+                                    phase_offset=phase_offset,
+                                    use='excitation', system=system)
+        
+        seq.add_block(gzr) # hack to have the second rewinder.... should fix later.
+        seq.add_block(rf, gz)
+        seq.add_block(gzr)
     
-    seq.add_block(gzr) # hack to have the second rewinder.... should fix later.
-    seq.add_block(rf, gz)
-    seq.add_block(gzr)
+    else:
+        rf_2 = copy.deepcopy(rf)
+        rf_2.signal = rf_2.signal * scale
+        rf_2.phase_offset = phase_offset
+        seq.add_block(gzr)
+        seq.add_block(rf_2, gz)
+        seq.add_block(gzr)
 
     delay_value = prep_param['TR_scale']*params['acquisition']['TR']
     if delay_value != 0:
