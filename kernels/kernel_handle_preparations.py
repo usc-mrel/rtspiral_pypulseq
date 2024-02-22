@@ -4,6 +4,7 @@ from kernels.kernel_rf import kernel_rf
 from kernels.kernel_crusher import kernel_crusher
 from kernels.kernel_tag_radial_AM import kernel_tag_radial_AM
 from kernels.kernel_trigger import kernel_trigger
+from kernels.kernel_flow_encoding import kernel_flow_encoding
 
 
 def prep_func(prep_table_str, seq, param, system, rf=None, gz=None, gzr=None):
@@ -17,6 +18,7 @@ def prep_func(prep_table_str, seq, param, system, rf=None, gz=None, gzr=None):
                 if prep['type'] == 'tagging':
                     output_string += prep['tag_type'] + '_'
                     if prep['tag_type'] == 'grid':
+                        output_string += str(prep['grid_tag_spacing']) + '_'
                         kernel_tag_SPAMM_REALTAG(seq, prep, param, system)
                     if prep['tag_type'] == 'radial':
                         kernel_tag_radial_AM(seq, prep, param, system)

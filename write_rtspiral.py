@@ -181,18 +181,23 @@ if 'fa_schedule' in params['acquisition']:
             T1 = params['acquisition']['fa_schedule'][0]['T1'] * 1e-3
             T2 = params['acquisition']['fa_schedule'][0]['T2'] * 1e-3
             TR = params['acquisition']['TR']
-            rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, T2, TR, np.deg2rad(params['acquisition']['flip_angle']), max_alpha=np.deg2rad(130))
+            rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, T2, TR, np.deg2rad(params['acquisition']['flip_angle']), max_alpha=np.deg2rad(180), truncate=False)
 
             # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
             rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
             params['flip_angle_last'] = np.rad2deg(rf_amplitudes[-1])
             FA_schedule_str = "ramp_ibrahim"
 
+_, rf.shape_IDs = seq.register_rf_event(rf)
 for arm_i in range(0,n_TRs):
     curr_rf = copy.deepcopy(rf)
 
     if 'fa_schedule' in params['acquisition']:
         if params['acquisition']['fa_schedule'][0]['enabled'] == True:
+            # if arm_i > len(rf_amplitudes), then just exit the for loop (i.e. don't add any more pulses)
+            if arm_i >= len(rf_amplitudes):
+                n_TRs = arm_i
+                break
             curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
 
     curr_rf.phase_offset = np.pi*np.mod(arm_i, 2)
