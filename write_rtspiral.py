@@ -14,7 +14,7 @@ from pypulseq.rotate import rotate
 from pypulseq.add_gradients import add_gradients
 from utils.load_params import load_params
 from utils.calculate_ramp_ibrahim import calculate_ramp_ibrahim
-from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
+from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
@@ -36,16 +36,16 @@ system = Opts(
 GRT = params['system']['grad_raster_time']
 
 spiral_sys = {
-    'max_slew'          :  params['system']['max_slew']*0.8,   # [T/m/s] 
+    'max_slew'          :  params['system']['max_slew']*params['spiral']['slew_ratio'],   # [T/m/s] 
     'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
     'adc_dwell'         :  params['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
     'os'                :  8
     }
 
-fov   = [params['acquisition']['fov']] # [cm]
-res   =  params['acquisition']['resolution'] # [mm]
-Tread =  params['spiral']['ro_duration'] # [s]
+fov   = params['acquisition']['fov'] # [cm]
+res   = params['acquisition']['resolution'] # [mm]
+Tread = params['spiral']['ro_duration'] # [s]
 
 
 # Design the spiral trajectory
@@ -67,14 +67,11 @@ if grad_rew_method == 1:
     # Method 1: GrOpt, separate optimization
     gropt_params = {}
     gropt_params['mode'] = 'free'
-    gropt_params['gmax']  = params['system']['max_grad']*1e-3 # [mT/m] -> [T/m]
-    gropt_params['smax']  = params['system']['max_slew']*0.8
+    gropt_params['gmax'] = params['system']['max_grad']*1e-3 # [mT/m] -> [T/m]
+    gropt_params['smax'] = params['system']['max_slew']*params['spiral']['slew_ratio']
+    gropt_params['dt']   = GRT
 
     gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,0]*1e3, 1.0e-3]]
-    gropt_params['dt']  = GRT
-
-    max_TE = 1.1
-
     gropt_params['gfix']  = np.array([g_grad[-1, 0]*1e-3, -99999, 0])
 
     g_rewind_x, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)

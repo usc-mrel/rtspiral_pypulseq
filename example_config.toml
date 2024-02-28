@@ -10,6 +10,7 @@ adc_dead_time     =  10e-6 # [s]
 
 [spiral]
 
+slew_ratio   = 0.8  # How much of the system slew rate to be used for spiral design.  
 ro_duration = 3e-3 # [s] Readout duration
 adc_dwell   = 1e-6 # [s]
 arm_ordering = 'ga' # 'linear', 'ga', 'tinyga', 'linear_custom'
@@ -20,9 +21,9 @@ custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by
 
 [acquisition]
 
-resolution      = 2     # [mm]
-fov             = 25.6  # [cm]
-slice_thickness = 6     # [mm]
+resolution      = 2       # [mm]
+fov             = [25.6]  # [cm]
+slice_thickness = 6       # [mm]
 
 flip_angle      = 100   # [deg]
 rf_duration     = 1e-3  # [s]
