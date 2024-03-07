@@ -56,7 +56,7 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # === design rewinder ===
-T_rew = 1e-3
+T_rew = 1.2e-3
 M = np.cumsum(g_grad, axis=0) * GRT
 
 grad_rew_method = 1
@@ -125,7 +125,9 @@ ndiscard = 10 # Number of samples to discard from beginning
 num_samples = np.floor(Tread/spiral_sys['adc_dwell']) + ndiscard
 adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=system)
 
-discard_delay_t = ndiscard*spiral_sys['adc_dwell'] # [s] Time to delay grads.
+# NOTE: we shift by GRT/2 and round to GRT because the grads will be shifted by GRT/2, and if we don't, last GRT/2 ADC samples discarded will be non-zero k-space.
+# Basically we will miss the center of k-space. Caveat this way is, now we have GRT/2 ADC samples that are at 0, and we potentially lost 10 us, both are no biggie.
+discard_delay_t = ceil((ndiscard*spiral_sys['adc_dwell']+GRT/2)/GRT)*GRT # [s] Time to delay grads.
 
 # Readout gradients
 
@@ -281,7 +283,7 @@ if params['user_settings']['write_seq']:
     if prep_str:
         seq_filename = f"spiral_bssfp_prep_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
     else:
-        seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_TR{TR*1e3}ms_{params['user_settings']['filename_ext']}"
+        seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_TR{TR*1e3:.2f}ms_{params['user_settings']['filename_ext']}"
 
     seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk
