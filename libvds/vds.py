@@ -170,10 +170,11 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tup
     numfov = fov.__len__()
     ngmax = ceil(Tread/Td)
 
-    fov_i = ffi.new("double*", numfov)
+    fov_i = ffi.new("double[]", numfov)
+    fovs = np.exp(log(1/krmax)*np.arange(0, numfov, 1))
 
-    fovs = 25.6*exp(log(1/krmax)*np.arange(0, numfov, 1))
-    fov_i[0] = fovs
+    for ii,fv in enumerate(fovs):
+        fov_i[ii] = fov[ii]*fv
 
     # Output variables
     xgrad_o = ffi.new("double**")

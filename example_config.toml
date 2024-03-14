@@ -10,19 +10,20 @@ adc_dead_time     =  10e-6 # [s]
 
 [spiral]
 
-ro_duration  = 3e-3 # [s] Readout duration
-adc_dwell    = 1e-6 # [s]
-arm_ordering = 'linear' # 'linear', 'ga', 'tinyga', 'linear_custom'
-GA_steps     = 144  # Number of unique GA_steps, determines the duration of 1 repetition. Only enabled if 'ga' or 'tinyga' is selected.
-GA_angle     = 222.4923  # [deg]
-# custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
+slew_ratio   = 0.8  # How much of the system slew rate to be used for spiral design.  
+ro_duration = 3e-3 # [s] Readout duration
+adc_dwell   = 1e-6 # [s]
+arm_ordering = 'ga' # 'linear', 'ga', 'tinyga', 'linear_custom'
+GA_steps    = 144  # 0 to disable GA
+GA_angle    = 112  # [deg]
+custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
 # Note: custom_order assumes the number of interleaves, and does not work if it does not match.
 
 [acquisition]
 
-resolution      = 2.4     # [mm]
-fov             = 24.0  # [cm]
-slice_thickness = 6     # [mm]
+resolution      = 2       # [mm]
+fov             = [25.6]  # [cm]
+slice_thickness = 6       # [mm]
 
 flip_angle      = 35    # [deg]
 rf_duration     = 1e-3  # [s]
@@ -30,7 +31,7 @@ rf_duration     = 1e-3  # [s]
 TR              = 0     # [ms], 0 for min TR
 TE              = 0     # [ms], 0 for min TE
 
-repetitions     = 10   # n_TRs = repetitions * n_interleaves. repetitions is usually set to 1.
+repetitions     = 1
 
 [[acquisition.fa_schedule]]
 type = "ramp_ibrahim"
