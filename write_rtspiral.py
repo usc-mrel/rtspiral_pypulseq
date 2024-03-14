@@ -18,6 +18,7 @@ from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
+from math import ceil
 import copy
 
 # Load and prep system and sequence parameters
@@ -199,7 +200,7 @@ TR_delay = make_delay(TRd)
 seq = Sequence(system)
 
 # handle any preparation pulses.
-prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gz, gzr=gzr)
+prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gzz)
 
 FA_schedule_str = ''
 
@@ -243,7 +244,7 @@ for arm_i in range(0,n_TRs):
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
-end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gz, gzr=gzr)
+end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gzz)
 
 # Quick timing check
 ok, error_report = seq.check_timing()

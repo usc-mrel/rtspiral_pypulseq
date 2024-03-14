@@ -4,10 +4,9 @@ from kernels.kernel_rf import kernel_rf
 from kernels.kernel_crusher import kernel_crusher
 from kernels.kernel_tag_radial_AM import kernel_tag_radial_AM
 from kernels.kernel_trigger import kernel_trigger
-from kernels.kernel_flow_encoding import kernel_flow_encoding
 
 
-def prep_func(prep_table_str, seq, param, system, rf=None, gz=None, gzr=None):
+def prep_func(prep_table_str, seq, param, system, rf=None, gz=None):
     output_string = ''
     if prep_table_str in param:
         for prep in param[prep_table_str]:
@@ -25,7 +24,7 @@ def prep_func(prep_table_str, seq, param, system, rf=None, gz=None, gzr=None):
                     if prep['tag_type'] == 'SPAMM_grid':
                         kernel_tag_SPAMM(seq, prep, param, system)
                 elif prep['type'] == 'rf':
-                    kernel_rf(seq, prep, param, system, rf=rf, gz=gz, gzr=gzr)
+                    kernel_rf(seq, prep, param, system, rf=rf, gz=gz)
                 elif prep['type'] == 'crusher':
                     kernel_crusher(seq, prep, param, system) 
         # remove last underscore
@@ -34,10 +33,10 @@ def prep_func(prep_table_str, seq, param, system, rf=None, gz=None, gzr=None):
     else:
         return output_string
 
-def kernel_handle_preparations(seq, param, system, rf=None, gz=None, gzr=None):
-    return prep_func('preparations', seq, param, system, rf=rf, gz=gz, gzr=gzr)
+def kernel_handle_preparations(seq, param, system, rf=None, gz=None):
+    return prep_func('preparations', seq, param, system, rf=rf, gz=gz)
   
 
-def kernel_handle_end_preparations(seq, param, system, rf=None, gz=None, gzr=None):
-    return prep_func('end_preparations', seq, param, system, rf=rf, gz=gz, gzr=gzr)
+def kernel_handle_end_preparations(seq, param, system, rf=None, gz=None):
+    return prep_func('end_preparations', seq, param, system, rf=rf, gz=gz)
   
