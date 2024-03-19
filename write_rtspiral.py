@@ -3,18 +3,15 @@ import matplotlib.pyplot as plt
 from pypulseq import Opts
 from pypulseq.make_sinc_pulse import make_sinc_pulse
 from pypulseq.make_arbitrary_grad import make_arbitrary_grad
-from pypulseq.make_extended_trapezoid import make_extended_trapezoid
 from pypulseq.make_delay import make_delay
 from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
-from pypulseq.make_trigger import make_trigger
 from pypulseq.rotate import rotate
 from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
-from utils.calculate_ramp_ibrahim import calculate_ramp_ibrahim
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
