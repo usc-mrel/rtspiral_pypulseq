@@ -12,6 +12,7 @@ from pypulseq.Sequence.sequence import Sequence
 from pypulseq.make_trigger import make_trigger
 from pypulseq.rotate import rotate
 from pypulseq.add_gradients import add_gradients
+from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
 from utils.calculate_ramp_ibrahim import calculate_ramp_ibrahim
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
@@ -202,36 +203,22 @@ seq = Sequence(system)
 # handle any preparation pulses.
 prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gzz)
 
-FA_schedule_str = ''
-
 # useful for end_peparation pulses.
 params['flip_angle_last'] = params['acquisition']['flip_angle']
 
 # tagging pulse pre-prep (only if fa_schedule exists)
-if 'fa_schedule' in params['acquisition']:
-    if params['acquisition']['fa_schedule'][0]['type'] == "ramp_ibrahim":
-        if params['acquisition']['fa_schedule'][0]['enabled'] == True:
-            T1 = params['acquisition']['fa_schedule'][0]['T1'] * 1e-3
-            T2 = params['acquisition']['fa_schedule'][0]['T2'] * 1e-3
-            TR = params['acquisition']['TR']
-            rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, T2, TR, np.deg2rad(params['acquisition']['flip_angle']), max_alpha=np.deg2rad(180), truncate=False)
-
-            # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
-            rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
-            params['flip_angle_last'] = np.rad2deg(rf_amplitudes[-1])
-            FA_schedule_str = "ramp_ibrahim"
+rf_amplitudes, FA_schedule_str = schedule_FA(params, n_TRs)
 
 _, rf.shape_IDs = seq.register_rf_event(rf)
 for arm_i in range(0,n_TRs):
     curr_rf = copy.deepcopy(rf)
 
-    if 'fa_schedule' in params['acquisition']:
-        if params['acquisition']['fa_schedule'][0]['enabled'] == True:
-            # if arm_i > len(rf_amplitudes), then just exit the for loop (i.e. don't add any more pulses)
-            if arm_i >= len(rf_amplitudes):
-                n_TRs = arm_i
-                break
-            curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
+    # check if we are using a rammped FA scheme (rf_amplitudes is a list []) 
+    if len(rf_amplitudes) > 0:
+        if arm_i >= len(rf_amplitudes):
+            n_TRs = arm_i
+            break
+        curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
 
     curr_rf.phase_offset = np.pi*np.mod(arm_i, 2)
     adc.phase_offset = curr_rf.phase_offset
