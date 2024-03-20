@@ -3,21 +3,20 @@ import matplotlib.pyplot as plt
 from pypulseq import Opts
 from pypulseq.make_sinc_pulse import make_sinc_pulse
 from pypulseq.make_arbitrary_grad import make_arbitrary_grad
-from pypulseq.make_extended_trapezoid import make_extended_trapezoid
 from pypulseq.make_delay import make_delay
 from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
-from pypulseq.make_trigger import make_trigger
 from pypulseq.rotate import rotate
 from pypulseq.add_gradients import add_gradients
+from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
-from utils.calculate_ramp_ibrahim import calculate_ramp_ibrahim
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
+from math import ceil
 import copy
 
 # Load and prep system and sequence parameters
@@ -130,7 +129,6 @@ adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=syste
 discard_delay_t = ceil((ndiscard*spiral_sys['adc_dwell']+GRT/2)/GRT)*GRT # [s] Time to delay grads.
 
 # Readout gradients
-
 gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0]*42.58e3, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
 gsp_x.first = 0
 gsp_x.last = 0
@@ -200,36 +198,28 @@ TR_delay = make_delay(TRd)
 seq = Sequence(system)
 
 # handle any preparation pulses.
-prep_str = kernel_handle_preparations(seq, params, system)
-
-# tagging pulse pre-prep
-if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
-    T1 = params['acquisition']['options']['T1'] * 1e-3
-    TR = params['acquisition']['TR']
-    rf_amplitudes = calculate_ramp_ibrahim(n_TRs, T1, TR, np.deg2rad(params['acquisition']['flip_angle']))
-
-    # pre-pend the rf_amplitudes with params['acquisition']['flip_angle']
-    rf_amplitudes = np.concatenate(([np.deg2rad(params['acquisition']['flip_angle'])], rf_amplitudes))
+prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gzz)
 
 # useful for end_peparation pulses.
-params['flip_angle_last'] = np.deg2rad(params['acquisition']['flip_angle'])
+params['flip_angle_last'] = params['acquisition']['flip_angle']
 
+# tagging pulse pre-prep (only if fa_schedule exists)
+rf_amplitudes, FA_schedule_str = schedule_FA(params, n_TRs)
+
+_, rf.shape_IDs = seq.register_rf_event(rf)
 for arm_i in range(0,n_TRs):
-    if params['acquisition']['options']['ramped_rf_ibrahim'] == True:
-        # re-make the sinc pulse with the new flip angle, but ensure same duration.
-        rf, _, _ = make_sinc_pulse(flip_angle=rf_amplitudes[arm_i], 
-                                duration=params['acquisition']['rf_duration'],
-                                slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
-                                time_bw_product=2,
-                                return_gz=True,
-                                use='excitation', system=system) 
-        params['flip_angle_last'] = rf_amplitudes[arm_i]
+    curr_rf = copy.deepcopy(rf)
 
-    rf.phase_offset = np.pi*np.mod(arm_i, 2)
-    adc.phase_offset = rf.phase_offset
-    seq.add_block(rf, gzz)
-    # seq.add_block(rf, gz)
-    # seq.add_block(gzr)
+    # check if we are using a rammped FA scheme (rf_amplitudes is a list []) 
+    if len(rf_amplitudes) > 0:
+        if arm_i >= len(rf_amplitudes):
+            n_TRs = arm_i
+            break
+        curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
+
+    curr_rf.phase_offset = np.pi*np.mod(arm_i, 2)
+    adc.phase_offset = curr_rf.phase_offset
+    seq.add_block(curr_rf, gzz)
     seq.add_block(TE_delay)
     if params['spiral']['arm_ordering'] == 'ga':
         seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
@@ -238,7 +228,7 @@ for arm_i in range(0,n_TRs):
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
-end_prep_str = kernel_handle_end_preparations(seq, params, system)
+end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gzz)
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -251,10 +241,16 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms')
+    seq.plot(show_blocks=False, grad_disp='mT/m', plot_now=False, time_disp='ms')
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
+
+    # make axis suqaure
+    plt.gca().set_aspect('equal', adjustable='box')
+    # double fontsize
+    plt.rcParams.update({'font.size': 14})
+
     #plt.plot(k_traj_adc[0,:], k_traj_adc[1,:], 'rx')
     plt.xlabel('$k_x [mm^{-1}]$')
     plt.ylabel('$k_y [mm^{-1}]$')
@@ -281,7 +277,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
     if prep_str:
-        seq_filename = f"spiral_bssfp_prep_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
+        seq_filename = f"spiral_bssfp_{FA_schedule_str}_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
     else:
         seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
 

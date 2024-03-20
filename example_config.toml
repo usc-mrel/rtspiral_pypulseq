@@ -5,7 +5,7 @@ max_slew          =    120 # [T/m/s]
 grad_raster_time  =  10e-6 # [s]
 rf_raster_time    =   1e-6 # [s]
 rf_ringdown_time  =  10e-6 # [s]
-rf_dead_time      = 100e-6 # [s]
+rf_dead_time      = 200e-6 # [s]
 adc_dead_time     =  10e-6 # [s]
 
 [spiral]
@@ -25,7 +25,7 @@ resolution      = 2       # [mm]
 fov             = [25.6]  # [cm]
 slice_thickness = 6       # [mm]
 
-flip_angle      = 100   # [deg]
+flip_angle      = 35    # [deg]
 rf_duration     = 1e-3  # [s]
 
 TR              = 0     # [ms], 0 for min TR
@@ -33,14 +33,60 @@ TE              = 0     # [ms], 0 for min TE
 
 repetitions     = 1
 
-[acquisition.options]
+[[acquisition.fa_schedule]]
+type = "ramp_ibrahim"
+enabled = false 
+T1                = 683 # [ms]
+T2                = 77  # [ms] 
 
-ramped_rf_ibrahim = false
-T1 = 1 # [s]
+[[preparations]]
+type = "trigger"
+enabled = false
+trigger_type = "physio1" # can be physio1 or physio2 (siemens lingo)
+ 
+[[preparations]]
+type            = "tagging"
+enabled         = false 
+
+tag_type        = "grid"
+grid_tag_spacing = 1    # [cm]
+ 
+# tag_type        = "radial"
+# num_tags = 10  # Number of taglines per half circle
+# tagging_time = 10  # in ms
+
+[[preparations]]
+type            = "rf"
+enabled         = true
+phase           = 180    # degrees
+rf_scale        = 0.5    # scale alpha by 0.5
+TR_scale        = 0.5    # set delay to TR/2
+
+ 
+[[end_preparations]]
+type            = "rf"
+enabled         = true
+phase           = 0      # degrees
+rf_scale        = -1    # -1 implies use the last RF amplitude.
+TR_scale        = 0.5    # set delay to TR/2
+
+
+[[end_preparations]]
+type            = "rf"
+enabled         = true
+phase           = 180    # degrees
+rf_scale        = -0.5    # scale alpha by 0.5
+TR_scale        = 0      # set delay
+
+[[end_preparations]]
+type            = "crusher"
+enabled         = true
+channel         = "z"
+cycles_per_thickness = 4
 
 [user_settings]
 
 write_seq    = true
-filename_ext = 'debug' # This will be attached to the filename
-show_plots   = true
+filename_ext = 'speech_1162024' # This will be attached to the filename
+show_plots   = true 
 detailed_rep = true

@@ -5,3 +5,4 @@ config.toml
 .vscode
 out_seq/
 out_trajectory
+gropt/gropt.c

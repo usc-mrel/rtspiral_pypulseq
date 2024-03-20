@@ -15,7 +15,7 @@ def kernel_tag_radial_AM(seq, prep_param, params, system):
 
     # use 0.2 of the max gradient
     g_amplitude = 0.2 * system.max_grad * 100 / system.gamma # in G/cm
-    rf_amplitude = 0.105 # in G
+    rf_amplitude = 0.120 # in G
 
     grad_sampling_rate = np.int32(1e-3 / system.grad_raster_time) # [samples/ms]
     rf_sampling_rate = np.int32(1e-3 / system.rf_raster_time) # [samples/ms]
