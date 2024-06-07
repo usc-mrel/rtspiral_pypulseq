@@ -1,8 +1,19 @@
 # 2D Real-time Spiral Sequences with PyPulseq
 
 ## Installation
+`python -m venv venv`
 
+`source activate venv/bin/activate`
+
+`pip install -r requirements.txt`
+
+Compile `vds` and `gropt`, copy respective `.so` files into `libvds` and `gropt`.
 ### Dependencies
+See `requirements.txt`.
+
+`vds`
+
+Optionally `gropt`.
 
 ## Usage
 

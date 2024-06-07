@@ -1,4 +1,5 @@
 rtspiral_env
+venv/
 .venv
 **/__pycache__/
 config.toml
