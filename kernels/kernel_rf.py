@@ -18,7 +18,6 @@ def kernel_rf(seq, prep_param, params, system, flip_angle=None, rf=None, gz=None
         scale = (fa_last/fa) * np.abs(scale)
     else:
         fa = params["acquisition"]["flip_angle"]
-        scale = 1
 
     if rf is None or gz is None:
         if flip_angle is None:
