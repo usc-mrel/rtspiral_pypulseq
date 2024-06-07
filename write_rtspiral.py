@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from pypulseq import Opts
 from pypulseq.make_sinc_pulse import make_sinc_pulse
 from pypulseq.make_arbitrary_grad import make_arbitrary_grad
+from pypulseq.make_trapezoid import make_trapezoid
 from pypulseq.make_delay import make_delay
 from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
@@ -95,7 +96,6 @@ if len(g_rewind_x) > len(g_rewind_y):
 else:
     g_rewind_x = np.concatenate((g_rewind_x, np.zeros(len(g_rewind_y) - len(g_rewind_x))))
 
-
 # concatenate g and g_rewind, and plot.
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
 
@@ -104,7 +104,6 @@ if params['user_settings']['show_plots']:
     plt.show()
 
 # Excitation
-
 rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180*np.pi, 
                                 duration=params['acquisition']['rf_duration'],
                                 slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
@@ -140,8 +139,15 @@ gsp_y.last = 0
 # Set the Slice rewinder balance gradients delay
 gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
 
-# set the rotations.
+# create a crusher gradient (only for FLASH)
+if params['spiral']['contrast'] == 'FLASH':
+    crush_area = (4 / (params['acquisition']['slice_thickness'] * 1e-3)) + (-1 * gzr.area)
+    gz_crush = make_trapezoid(channel='z', 
+                              area=crush_area, 
+                              max_grad=system.max_grad, 
+                              system=system)
 
+# set the rotations.
 gsp_xs = []
 gsp_ys = []
 print(f"Spiral arm ordering is {params['spiral']['arm_ordering']}.")
@@ -150,6 +156,7 @@ if params['spiral']['arm_ordering'] == 'linear':
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
+        params['spiral']['GA_angle'] = 360/n_int
     n_TRs = n_int * params['acquisition']['repetitions']
 elif params['spiral']['arm_ordering'] == 'ga':
     n_TRs = params['spiral']['GA_steps']
@@ -163,12 +170,23 @@ elif params['spiral']['arm_ordering'] == 'ga':
         ang = ang % (2*np.pi)
         # print(f"Deg: {ang*180/np.pi}")
     n_TRs = n_int * params['acquisition']['repetitions']
+elif params['spiral']['arm_ordering'] == 'linear_custom':
+    assert n_int == len(params['spiral']['custom_order']), "number of interleaves does not match custom order!"
+    view_order = params['spiral']['custom_order']
+    for i in range(0, n_int):
+        gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
+        gsp_xs.append(gsp_x_rot)
+        gsp_ys.append(gsp_y_rot)
+        params['spiral']['GA_angle'] = 360/n_int
 
+    # re-order using the custom view order
+    gsp_xs[:] = [gsp_xs[d] for d in view_order]
+    gsp_ys[:] = [gsp_ys[d] for d in view_order]
+    n_TRs = n_int * params['acquisition']['repetitions']
 else:
     raise Exception("Unknown arm ordering") 
 
 # Set the delays
-
 # TE 
 if params['acquisition']['TE'] == 0:
     TEd = 0
@@ -184,12 +202,16 @@ else:
 if params['acquisition']['TR'] == 0:
     TRd = 0
     TR = calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc)
+    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+        TR = TR + calc_duration(gz_crush)
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
     params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
     TRd = TR - (calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc))
-    assert TRd >= 0, "Required TE can not be achieved."
+    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+        TRd = TRd - calc_duration(gz_crush)
+    assert TRd >= 0, "Required TR can not be achieved."
 
 TE_delay = make_delay(TEd)
 TR_delay = make_delay(TRd)
@@ -206,6 +228,22 @@ params['flip_angle_last'] = params['acquisition']['flip_angle']
 # tagging pulse pre-prep (only if fa_schedule exists)
 rf_amplitudes, FA_schedule_str = schedule_FA(params, n_TRs)
 
+# used for FLASH only: set rf spoiling increment.
+rf_phase = 0
+rf_inc = 0
+
+if params['spiral']['contrast'] == 'FLASH':
+    linear_phase_increment = 0
+    quadratic_phase_increment = np.deg2rad(117)
+elif params['spiral']['contrast'] in ('trueFISP', 'FISP'):
+    linear_phase_increment = np.deg2rad(180)
+    quadratic_phase_increment = 0
+else:
+    print("Unknown contrast type. Assuming trueFISP.")
+    linear_phase_increment = np.deg2rad(180)
+    quadratic_phase_increment = 0
+    params['spiral']['contrast'] = 'trueFISP'
+
 _, rf.shape_IDs = seq.register_rf_event(rf)
 for arm_i in range(0,n_TRs):
     curr_rf = copy.deepcopy(rf)
@@ -216,15 +254,21 @@ for arm_i in range(0,n_TRs):
             n_TRs = arm_i
             break
         curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
+    
+    curr_rf.phase_offset = rf_phase
+    adc.phase_offset = rf_phase
 
-    curr_rf.phase_offset = np.pi*np.mod(arm_i, 2)
-    adc.phase_offset = curr_rf.phase_offset
+    rf_inc = np.mod(rf_inc + quadratic_phase_increment, np.pi * 2)
+    rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
+
     seq.add_block(curr_rf, gzz)
     seq.add_block(TE_delay)
     if params['spiral']['arm_ordering'] == 'ga':
         seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
     else:
         seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
+    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+        seq.add_block(gz_crush)
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
@@ -276,10 +320,10 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    if prep_str:
-        seq_filename = f"spiral_bssfp_{FA_schedule_str}_{prep_str}_endprep_{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']}_{params['user_settings']['filename_ext']}"
-    else:
-        seq_filename = f"spiral_bssfp_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+
+    # remove double, triple, quadruple underscores, and trailing underscores
+    seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")
 
     seq_path = os.path.join('out_seq', f"{seq_filename}.seq")
     seq.write(seq_path)  # Save to disk

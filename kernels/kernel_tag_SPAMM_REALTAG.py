@@ -8,7 +8,7 @@ def kernel_tag_SPAMM_REALTAG(seq, prep_param, params, system):
     RF_1_x = make_block_pulse(np.deg2rad(22.5), delay=0, time_bw_product=2, duration=duration,system=system)
     RF_2_x = make_block_pulse(np.deg2rad(67.5), delay=0, time_bw_product=2, duration=duration,system=system)
 
-    clip_area = prep_param['grid_tag_spacing'] * 100
+    clip_area = (1/prep_param['grid_tag_spacing']) * 100
 
     gradx = make_trapezoid(channel="x", area=clip_area,system=system)
 
