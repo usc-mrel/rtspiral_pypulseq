@@ -101,4 +101,5 @@ def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float,
     }
 
     traj_path = os.path.join('out_trajectory', f'{filename}.mat')
+    os.makedirs("out_trajectory", exist_ok=True)
     savemat(traj_path, {'kx': kx, 'ky': ky,'kz': kz, 'w' : w, 'param': meta})
