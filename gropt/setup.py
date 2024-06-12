@@ -1,5 +1,5 @@
 # Updated setup.py for MacOS stock LLVM compilation, but I would like to
-# add some type of homebrew gcc detection for openmp . . . 
+# add some type of homebrew gcc detection for openmp . . .
 import os, sys
 
 def is_platform_windows():
@@ -19,10 +19,10 @@ from Cython.Build import cythonize
 import numpy
 
 
-sourcefiles = ['gropt.pyx', '../src/cvx_matrix.c', '../src/te_finder.c', '../src/op_gradient.c', '../src/op_maxwell.c', '../src/op_bval.c', '../src/op_beta.c', '../src/op_eddy.c', '../src/op_slewrate.c', '../src/op_moments.c', '../src/op_pns.c']
+sourcefiles = ['gropt.pyx', './src/cvx_matrix.c', './src/te_finder.c', './src/op_gradient.c', './src/op_maxwell.c', './src/op_bval.c', './src/op_beta.c', './src/op_eddy.c', './src/op_slewrate.c', './src/op_moments.c', './src/op_pns.c']
 
-include_dirs = [".",  "../src", numpy.get_include()]
-library_dirs = [".", "../src"]
+include_dirs = [".",  "./src", numpy.get_include()]
+library_dirs = [".", "./src"]
 if is_platform_windows:
     extra_compile_args = []
 else:

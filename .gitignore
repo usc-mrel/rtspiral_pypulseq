@@ -1,9 +1,15 @@
 rtspiral_env
 venv/
 .venv
+venv/
 **/__pycache__/
 config.toml
 .vscode
 out_seq/
 out_trajectory
 gropt/gropt.c
+*.so
+build/
+*/build
+*.egg-info
+
