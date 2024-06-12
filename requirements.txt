@@ -1,3 +1,5 @@
+setuptools
+cython
 cffi==1.16.0
 contourpy==1.2.0
 cycler==0.12.1

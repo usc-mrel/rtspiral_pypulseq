@@ -1,6 +1,6 @@
 
-from _vds.lib import calc_vds
-from _vds import ffi
+from ._vds.lib import calc_vds
+from ._vds import ffi
 import numpy as np
 import numpy.typing as npt
 from math import exp, log, ceil, sqrt

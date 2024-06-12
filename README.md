@@ -2,14 +2,41 @@
 
 ## Installation
 
+Create a Python environment with your favorite tool (venv, conda, pyenv). For `venv`:
+
+```python -m venv venv```
+
+Activate your environment. For example, for `venv`:
+
+```source venv/bin/activate```
+
+Install the dependencies:
+
+```pip install -r requirements.txt```
+
+Build `gropt` and `libvds` libraries for your system:
+
+```python setup.py develop```
+
+Last command should compile and put the libraries to the necessary places.
+
 ### Dependencies
+
+Refer to `requirements.txt` file.
 
 ## Usage
 
 ### Configuration
+
+Copy `example_config.toml` and rename it as `config.toml`.
+
 `systems/` contains example scanner specs to copy paste into config.toml [system] part.
 
+Run `write_rtspiral.py` to generate the trajectory and metadata.
+
 ### Outputs
+
+When `write_seq = true` in `config.toml`, a `.seq` file will be generated in the `out_seq/` directory, and the corresponding metadata, which will be named as the `sequence_hash.mat` as a `.mat` file will be put into `out_trajectory/` directory.
 
 ## References and Acknowledgements
 
