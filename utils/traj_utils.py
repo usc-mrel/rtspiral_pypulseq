@@ -56,12 +56,15 @@ def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float,
     Nsample2 = Nsample-ndiscard
     kx = k_traj_adc[0,:]
     ky = k_traj_adc[1,:]
+    kz = k_traj_adc[2,:]
     kx = np.reshape(kx, (-1, Nsample)).T
     ky = np.reshape(ky, (-1, Nsample)).T
+    kz = np.reshape(kz, (-1, Nsample)).T
     kxx = kx[:,0]
     kyy = ky[:,0]
     kx = kx[ndiscard:,:]
     ky = ky[ndiscard:,:]
+    kz = kz[ndiscard:,:]
 
     # kx = kx[ndiscard:,0]
     # ky = ky[ndiscard:,0]
@@ -98,4 +101,4 @@ def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float,
     }
 
     traj_path = os.path.join('out_trajectory', f'{filename}.mat')
-    savemat(traj_path, {'kx': kx, 'ky': ky, 'w' : w, 'param': meta})
+    savemat(traj_path, {'kx': kx, 'ky': ky,'kz': kz, 'w' : w, 'param': meta})

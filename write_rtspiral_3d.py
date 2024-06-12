@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pypulseq import Opts
 from pypulseq.make_sinc_pulse import make_sinc_pulse
+from pypulseq.make_arbitrary_rf import make_arbitrary_rf
 from pypulseq.make_arbitrary_grad import make_arbitrary_grad
 from pypulseq.make_trapezoid import make_trapezoid
 from pypulseq.make_delay import make_delay
@@ -18,10 +19,11 @@ from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time,
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
+from sigpy.mri.rf import slr 
 import copy
 
 # Load and prep system and sequence parameters
-params = load_params('config', './')
+params = load_params('config_3d', './')
 
 system = Opts(
     max_grad = params['system']['max_grad'], grad_unit="mT/m",
@@ -36,16 +38,16 @@ system = Opts(
 GRT = params['system']['grad_raster_time']
 
 spiral_sys = {
-    'max_slew'          :  params['system']['max_slew']*params['spiral']['slew_ratio'],   # [T/m/s] 
+    'max_slew'          :  params['system']['max_slew']*params['acquisition']['spiral']['slew_ratio'],   # [T/m/s] 
     'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
-    'adc_dwell'         :  params['spiral']['adc_dwell'],  # [s]
+    'adc_dwell'         :  params['acquisition']['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
     'os'                :  8
     }
 
 fov   = params['acquisition']['fov'] # [cm]
 res   = params['acquisition']['resolution'] # [mm]
-Tread = params['spiral']['ro_duration'] # [s]
+Tread = params['acquisition']['spiral']['ro_duration'] # [s]
 
 
 # Design the spiral trajectory
@@ -68,7 +70,7 @@ if grad_rew_method == 1:
     gropt_params = {}
     gropt_params['mode'] = 'free'
     gropt_params['gmax'] = params['system']['max_grad']*1e-3 # [mT/m] -> [T/m]
-    gropt_params['smax'] = params['system']['max_slew']*params['spiral']['slew_ratio']
+    gropt_params['smax'] = params['system']['max_slew']*params['acquisition']['spiral']['slew_ratio']
     gropt_params['dt']   = GRT
 
     gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,0]*1e3, 1.0e-3]]
@@ -96,6 +98,7 @@ if len(g_rewind_x) > len(g_rewind_y):
 else:
     g_rewind_x = np.concatenate((g_rewind_x, np.zeros(len(g_rewind_y) - len(g_rewind_x))))
 
+
 # concatenate g and g_rewind, and plot.
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
 
@@ -104,17 +107,41 @@ if params['user_settings']['show_plots']:
     plt.show()
 
 # Excitation
-rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180*np.pi, 
+if params['acquisition']['excitation'] == 'sinc':
+    rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180*np.pi, 
                                 duration=params['acquisition']['rf_duration'],
                                 slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
-                                time_bw_product=2,
+                                time_bw_product=6,
                                 return_gz=True,
                                 use='excitation', system=system)
+else: #params['acquisition']['excitation'] == 'slr':
+    alpha = params['acquisition']['flip_angle']
+    dt = system.rf_raster_time
+    raster_ratio = int(system.grad_raster_time / system.rf_raster_time)
+    Trf = params['acquisition']['rf_duration']
+    tbwp = params['acquisition']['tbwp']
+
+    n = ceil((Trf/dt)/(4*raster_ratio))*4*raster_ratio
+    Trf = n*dt
+    bw = tbwp/Trf
+    signal = slr.dzrf(n=n, tb=tbwp, ptype='st', ftype='ls', d1=0.01, d2=0.01, cancel_alpha_phs=False)
+
+    rf, gz = make_arbitrary_rf(signal=signal, slice_thickness=params['acquisition']['slice_thickness']*1e-3,
+                               bandwidth=bw,  flip_angle=alpha * np.pi / 180,
+                               system=system, return_gz=True, use="excitation")
+    gzr = make_trapezoid(channel='z', area=-gz.area/2, system=system)
 
 gzrr = copy.deepcopy(gzr)
 gzrr.delay = 0 #gz.delay
 rf.delay = calc_duration(gzrr) + gz.rise_time
-gz.delay = calc_duration(gzrr)
+
+additional_delay = 0
+if rf.delay < params['system']['rf_dead_time']:
+    # unfortunately, we have to artificially increase the delay.
+    additional_delay = params['system']['rf_dead_time'] - rf.delay
+
+rf.delay = rf.delay + additional_delay
+gz.delay = calc_duration(gzrr) + additional_delay
 gzr.delay = calc_duration(gzrr, gz)
 gzz = add_gradients([gzrr, gz, gzr], system=system)
 
@@ -140,77 +167,107 @@ gsp_y.last = 0
 gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
 
 # create a crusher gradient (only for FLASH)
-if params['spiral']['contrast'] == 'FLASH':
-    crush_area = (4 / (params['acquisition']['slice_thickness'] * 1e-3)) + (-1 * gzr.area)
-    gz_crush = make_trapezoid(channel='z', 
-                              area=crush_area, 
-                              max_grad=system.max_grad, 
-                              system=system)
+gz_crush = 0
+crush_area = (4 / (params['acquisition']['slice_thickness'] * 1e-3)) + (-1 * gzr.area)
+gz_crush = make_trapezoid(channel='z', 
+                          area=crush_area, 
+                          max_grad=system.max_grad, 
+                          system=system)
 
 # set the rotations.
 gsp_xs = []
 gsp_ys = []
-print(f"Spiral arm ordering is {params['spiral']['arm_ordering']}.")
-if params['spiral']['arm_ordering'] == 'linear':
+print(f"Spiral arm ordering is {params['acquisition']['spiral']['arm_ordering']}.")
+if params['acquisition']['spiral']['arm_ordering'] == 'linear':
     for i in range(0, n_int):
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
-        params['spiral']['GA_angle'] = 360/n_int
+        params['acquisition']['spiral']['GA_angle'] = 360/n_int
     n_TRs = n_int * params['acquisition']['repetitions']
-elif params['spiral']['arm_ordering'] == 'ga':
-    n_TRs = params['spiral']['GA_steps']
+elif params['acquisition']['spiral']['arm_ordering'] == 'ga':
+    n_TRs = params['acquisition']['spiral']['GA_steps']
     n_int = n_TRs
     ang = 0
     for i in range(0, n_TRs):
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
-        ang += params['spiral']['GA_angle']*np.pi/180
+        ang += params['acquisition']['spiral']['GA_angle']*np.pi/180
         ang = ang % (2*np.pi)
         # print(f"Deg: {ang*180/np.pi}")
     n_TRs = n_int * params['acquisition']['repetitions']
-elif params['spiral']['arm_ordering'] == 'linear_custom':
-    assert n_int == len(params['spiral']['custom_order']), "number of interleaves does not match custom order!"
-    view_order = params['spiral']['custom_order']
-    for i in range(0, n_int):
-        gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
-        gsp_xs.append(gsp_x_rot)
-        gsp_ys.append(gsp_y_rot)
-        params['spiral']['GA_angle'] = 360/n_int
 
-    # re-order using the custom view order
-    gsp_xs[:] = [gsp_xs[d] for d in view_order]
-    gsp_ys[:] = [gsp_ys[d] for d in view_order]
-    n_TRs = n_int * params['acquisition']['repetitions']
 else:
     raise Exception("Unknown arm ordering") 
 
+
+# set the kz encoding if it is a 3D acquisition.
+acquisition_type = '3D' if 'kz_encoding' in params['acquisition'] else '2D'
+gzs = []
+dummy_trap = make_trapezoid(channel="z", area=0, system=system)
+kz_encoding_str = ''
+if acquisition_type == '3D':
+    kz_fov = params['acquisition']['kz_encoding']['FOV'] * 1e-3
+    nkz = params['acquisition']['kz_encoding']['repetitions']
+    phase_areas = (np.arange(nkz) - (nkz / 2)) * (1 / kz_fov)
+
+    # make the largest trapezoid, and use it's duration for all of them.
+    dummy_trap = make_trapezoid(channel="z", area=phase_areas[0], system=system)
+
+    kz_encoding_str = params['acquisition']['kz_encoding']['ordering'] 
+    print(f"Kz encoding ordering is {kz_encoding_str}.")
+    if kz_encoding_str == 'ping-pong':
+        kz_idx = np.hstack((np.arange(nkz), np.flip(np.arange(nkz))))
+        for i in range(0, kz_idx.shape[0]):
+            gzs.append(make_trapezoid(channel='z', area=phase_areas[kz_idx[i]], duration=calc_duration(dummy_trap), system=system))
+    elif kz_encoding_str == 'gaussian':
+        kz_idx = np.asarray([1,3,5,6,7,8,8,9,9,9,10,10,11,12,13,15,\
+                             16,14,12,11,10,10,9,9,9,8,8,7,6,5,4,2])
+        # make it 0-indexed.
+        kz_idx = kz_idx - 1
+        for i in range(0, kz_idx.shape[0]):
+            gzs.append(make_trapezoid(channel='z', area=phase_areas[kz_idx[i]],\
+                                      duration=calc_duration(dummy_trap), system=system))
+
+    # add the stack-type to the kz encoding string
+    kz_encoding_str = kz_encoding_str + '_' +\
+        params['acquisition']['kz_encoding']['rotation_type']
+
 # Set the delays
+
 # TE 
 if params['acquisition']['TE'] == 0:
     TEd = 0
     TE = rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) - gzr.delay + gsp_x.delay
+    if acquisition_type == '3D':
+        TE = TE + calc_duration(gzs[0])
     print(f'Min TE is set: {TE*1e3:.3f} ms.')
     params['acquisition']['TE'] = TE
 else:
     TE = params['acquisition']['TE']*1e-3
     TEd = TE - (rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) + gsp_x.delay)
+    if acquisition_type == '3D': 
+        TEd = TEd - calc_duration(gzs[0])
     assert TEd >= 0, "Required TE can not be achieved."
 
 # TR
 if params['acquisition']['TR'] == 0:
     TRd = 0
     TR = calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc)
-    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+    if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         TR = TR + calc_duration(gz_crush)
+    if acquisition_type == '3D':
+        TR = TR + (calc_duration(gzs[0]) * 2)
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
     params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
     TRd = TR - (calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc))
-    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+    if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         TRd = TRd - calc_duration(gz_crush)
+    if acquisition_type == '3D':
+        TRd = TRd - (calc_duration(gzs[0]) * 2)
     assert TRd >= 0, "Required TR can not be achieved."
 
 TE_delay = make_delay(TEd)
@@ -232,19 +289,23 @@ rf_amplitudes, FA_schedule_str = schedule_FA(params, n_TRs)
 rf_phase = 0
 rf_inc = 0
 
-if params['spiral']['contrast'] == 'FLASH':
+if params['acquisition']['spiral']['contrast'] == 'FLASH':
     linear_phase_increment = 0
     quadratic_phase_increment = np.deg2rad(117)
-elif params['spiral']['contrast'] in ('trueFISP', 'FISP'):
+elif params['acquisition']['spiral']['contrast'] in ('trueFISP', 'FISP'):
     linear_phase_increment = np.deg2rad(180)
     quadratic_phase_increment = 0
 else:
     print("Unknown contrast type. Assuming trueFISP.")
     linear_phase_increment = np.deg2rad(180)
     quadratic_phase_increment = 0
-    params['spiral']['contrast'] = 'trueFISP'
+    params['acquisition']['spiral']['contrast'] = 'trueFISP'
 
 _, rf.shape_IDs = seq.register_rf_event(rf)
+
+# decide to loop kz on the 'outside' or 'inside.
+loop_type = params['acquisition']['kz_encoding']['rotation_type']
+
 for arm_i in range(0,n_TRs):
     curr_rf = copy.deepcopy(rf)
 
@@ -262,13 +323,36 @@ for arm_i in range(0,n_TRs):
     rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
 
     seq.add_block(curr_rf, gzz)
+
+    # if we are doing 3D, then add the blips.
+    if acquisition_type == '3D':
+        seq.add_block(gzs[arm_i % len(gzs)])
+
     seq.add_block(TE_delay)
-    if params['spiral']['arm_ordering'] == 'ga':
-        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
-    else:
-        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
-    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+
+    in_plane_rot = params['acquisition']['spiral']['GA_steps'] if \
+         params['acquisition']['spiral']['arm_ordering'] == 'ga' \
+         else n_int
+
+    arm_idx = np.floor(arm_i / params['acquisition']['kz_encoding']['repetitions']) \
+        .astype(int) % in_plane_rot \
+        if loop_type == 'stack' \
+        else arm_i % in_plane_rot
+
+    seq.add_block(gsp_xs[arm_idx], gsp_ys[arm_idx], adc)
+
+    # if we are doing 3D, add 3D rewinder.
+    if acquisition_type == '3D':
+        gz_rewind = gzs[arm_i % len(gzs)]
+        gz_rewind.amplitude = -gz_rewind.amplitude
+        seq.add_block(gz_rewind)
+        gz_rewind.amplitude = -gz_rewind.amplitude
+
+    # additional crushing if necessary.
+    if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         seq.add_block(gz_crush)
+
+    # find the TR to check the timing
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
@@ -287,8 +371,14 @@ else:
 if params['user_settings']['show_plots']:
     seq.plot(show_blocks=False, grad_disp='mT/m', plot_now=False, time_disp='ms')
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
-    plt.figure()
-    plt.plot(k_traj[0,:], k_traj[1, :])
+
+    if acquisition_type=='3D': 
+        plt.figure()
+        plt.axes(projection='3d')
+    else:
+        plt.figure()
+
+    plt.plot(k_traj_adc[0,:], k_traj_adc[1, :], k_traj_adc[2, :])
 
     # make axis suqaure
     plt.gca().set_aspect('equal', adjustable='box')
@@ -314,13 +404,16 @@ if params['user_settings']['write_seq']:
     from utils.traj_utils import save_traj_dcf, save_traj_analyticaldcf
 
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
+    #if acquisition_type == '2D':
     seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
+    # else:
+    #    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['kz_encoding']['FOV']/params['acquisition']['kz_encoding']['repetitions']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
     seq.set_definition(key="TE", value=TE)
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_{acquisition_type}_{kz_encoding_str}_{params['acquisition']['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['acquisition']['spiral']['arm_ordering']}{params['acquisition']['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['acquisition']['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
     seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")
