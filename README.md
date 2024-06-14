@@ -1,7 +1,6 @@
 # 2D Real-time Spiral Sequences with PyPulseq
 
 ## Installation
-`python -m venv venv`
 
 Create a Python environment with your favorite tool (venv, conda, pyenv). For `venv`:
 
