@@ -24,11 +24,7 @@ Last command should compile and put the libraries to the necessary places.
 ### Dependencies
 See `requirements.txt`.
 
-`vds`
-
-Optionally `gropt`.
-
-Refer to `requirements.txt` file.
+`gropt` is optional. If it is not possible to compile it for your system, please use the other rewinder design methods. Note that there are small changes to the Python code of the library as bug fixes.
 
 ## Usage
 

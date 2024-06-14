@@ -14,7 +14,6 @@ from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
-from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -56,12 +55,12 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # === design rewinder ===
-T_rew = 1.2e-3
 M = np.cumsum(g_grad, axis=0) * GRT
 
-grad_rew_method = 1
+grad_rew_method = params['spiral']['grad_rew_method']
+T_rew = params['spiral']['rewinder_time']
 # Design rew with gropt
-if grad_rew_method == 1:
+if grad_rew_method == 'gropt':
     from gropt.helper_utils import *
 
     # Method 1: GrOpt, separate optimization
@@ -83,7 +82,21 @@ if grad_rew_method == 1:
     g_rewind_y, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
     g_rewind_y = g_rewind_y.T[:,0]*1e3
 
-elif grad_rew_method == 2:
+elif grad_rew_method == 'ext_trap_area':
+    from pypulseq.make_extended_trapezoid_area import make_extended_trapezoid_area
+
+    # Copy the system to modify slew rate to obey reduced SR of the spirals.
+    system2 = copy.deepcopy(system)
+    system2.max_slew = system.max_slew*params['spiral']['slew_ratio']
+    _,times_x,amplitudes_x = make_extended_trapezoid_area(channel='x', area=-M[-1,0]*system2.gamma*1e-3, grad_start=g_grad[-1, 0]*system2.gamma*1e-3, grad_end=0, system=system2)
+    _,times_y,amplitudes_y = make_extended_trapezoid_area(channel='y', area=-M[-1,1]*system2.gamma*1e-3, grad_start=g_grad[-1, 1]*system2.gamma*1e-3, grad_end=0, system=system2)
+
+    g_rewind_x = 1e3*pts_to_waveform(times_x, amplitudes_x, GRT)/system2.gamma
+    g_rewind_y = 1e3*pts_to_waveform(times_y, amplitudes_y, GRT)/system2.gamma
+
+elif grad_rew_method == 'exact_time':
+    from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
+
     [times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
     [times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
 
