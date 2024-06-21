@@ -15,6 +15,6 @@ PySide2==5.13.2
 python-dateutil==2.8.2
 six==1.16.0
 sigpy==0.1.26
-pypulseq @ git+https://github.com/imr-framework/pypulseq@dev
+pypulseq==1.4.2
 tomli >= 1.1.0 ; python_version < "3.11"
 seaborn
