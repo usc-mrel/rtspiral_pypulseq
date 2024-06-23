@@ -13,9 +13,9 @@ from pypulseq.rotate import rotate
 from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
-from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
+from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design, calcgradinfo
 from libspiralgen.spiralgen import spiralgen_design
-from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
+import spiraltraj 
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -36,34 +36,54 @@ system = Opts(
 
 GRT = params['system']['grad_raster_time']
 
+spiral_method = 'vds' # vds, pipe_arch, pipe_fermat, spiraltraj
+
 spiral_sys = {
     'max_slew'          :  params['system']['max_slew']*params['spiral']['slew_ratio'],   # [T/m/s] 
     'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
     'adc_dwell'         :  params['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
     'os'                :  8,
-    'spiral_type': 0,  # 0, 3
     }
+
+if spiral_method == 'pipe_arch':
+    spiral_sys['spiral_type'] = 0
+elif spiral_method == 'pipe_fermat':
+    spiral_sys['spiral_type'] = 3
 
 fov   = params['acquisition']['fov'] # [cm]
 res   = params['acquisition']['resolution'] # [mm]
 Tread = params['spiral']['ro_duration'] # [s]
 
-
 # Design the spiral trajectory
 # k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
-n_int = 23
-# k, g, s, t = vds_design(spiral_sys, n_int, fov, res, Tread)
+n_int = 34
+if spiral_method == 'vds':
+    k, g, s, t = vds_design(spiral_sys, n_int, fov, res, Tread*2)
+    t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
-k, g, grew, s, t = spiralgen_design(spiral_sys, n_int, fov[0]*1e-2, res*1e-3, Tread)
-g_rewind_x = grew[:,0]
-g_rewind_y = grew[:,1]
+elif spiral_method == 'pipe_arch' or spiral_method == 'pipe_fermat': 
+    k, g, grew, s, t = spiralgen_design(spiral_sys, n_int, fov[0]*1e-2, res*1e-3, Tread)
+    # g_rewind_x = grew[:,0]
+    # g_rewind_y = grew[:,1]
+
+    t_grad = t
+    g_grad = g
+
+elif spiral_method == 'spiraltraj':
+    g = spiraltraj.calc_traj(
+    nitlv=n_int, fov=fov[0]*10, res=res, max_amp=spiral_sys['max_grad'], min_rise=1e3/spiral_sys['max_slew'], spiraltype=1)
+
+    g = np.array(g)
+
+    g = np.concatenate((np.zeros((1,2)), g, np.zeros((1,2))), axis=0)
+    _, _, _, _, _, t, _ = calcgradinfo(g, 10e-6)
+    g_grad = g
+    t_grad = t
 
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
-# t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
-t_grad = t
-g_grad = g
+Tread = g_grad.shape[0]*GRT # Update Tread in case actual readout time is different
 
 # === design rewinder ===
 M = np.cumsum(g_grad, axis=0) * GRT
@@ -144,6 +164,10 @@ gzz = add_gradients([gzrr, gz, gzr], system=system)
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
+
+if np.floor(Tread/spiral_sys['adc_dwell']) % 2 == 1: # If trajectory has odd number of ADC make it even
+    ndiscard += 1
+
 num_samples = np.floor(Tread/spiral_sys['adc_dwell']) + ndiscard
 adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=system)
 
@@ -344,7 +368,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{Tread*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}_{spiral_method}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
     seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")
