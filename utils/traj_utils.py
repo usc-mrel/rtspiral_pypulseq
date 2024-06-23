@@ -78,7 +78,7 @@ def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float,
     cosgk = np.cos(np.arctan2(kxx, kyy) - np.arctan2(gx, gy))
     w = np.sqrt(kxx*kxx+kyy*kyy)*np.sqrt(gx*gx+gy*gy)*np.abs(cosgk)
     w = w[ndiscard:]
-    w[-int(Nsample//1.5):] = w[-int(Nsample//1.5)] # need this to correct weird jump at the end and improve SNR
+    w[-int(Nsample//2):] = w[-int(Nsample//2)] # need this to correct weird jump at the end and improve SNR
     w = w/np.max(w)
 
     if show_plots:
