@@ -14,6 +14,8 @@ from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
+from libspiralgen.spiralgen import spiralgen_design
+from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -39,7 +41,8 @@ spiral_sys = {
     'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
     'adc_dwell'         :  params['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
-    'os'                :  8
+    'os'                :  8,
+    'spiral_type': 0,  # 0, 3
     }
 
 fov   = params['acquisition']['fov'] # [cm]
@@ -48,11 +51,19 @@ Tread = params['spiral']['ro_duration'] # [s]
 
 
 # Design the spiral trajectory
-k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
+# k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
+n_int = 23
+# k, g, s, t = vds_design(spiral_sys, n_int, fov, res, Tread)
+
+k, g, grew, s, t = spiralgen_design(spiral_sys, n_int, fov[0]*1e-2, res*1e-3, Tread)
+g_rewind_x = grew[:,0]
+g_rewind_y = grew[:,1]
 
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
-t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
+# t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
+t_grad = t
+g_grad = g
 
 # === design rewinder ===
 M = np.cumsum(g_grad, axis=0) * GRT
