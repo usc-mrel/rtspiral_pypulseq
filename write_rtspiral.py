@@ -9,6 +9,7 @@ from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
+from pypulseq.make_digital_output_pulse import make_digital_output_pulse
 from pypulseq.rotate import rotate
 from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
@@ -173,6 +174,17 @@ if params['spiral']['arm_ordering'] == 'linear':
     n_TRs = n_int * params['acquisition']['repetitions']
 elif params['spiral']['arm_ordering'] == 'ga':
     n_TRs = params['spiral']['GA_steps']
+    if (n_TRs%2) == 1 and (params['acquisition']['repetitions']%2) == 1:
+        import warnings
+        warnings.warn(
+                    '''
+                      ========================================
+                      Number of arms in the sequence is odd.
+                      This may create steady state artifacts during the imaging with multiple runs, due to RF phase not alternating properly.
+                      To avoid this issue, set repetitions to an even number.
+                      ========================================
+                      ''')
+
     n_int = n_TRs
     ang = 0
     for i in range(0, n_TRs):
@@ -257,6 +269,10 @@ else:
     quadratic_phase_increment = 0
     params['spiral']['contrast'] = 'trueFISP'
 
+enable_trigger = True
+
+trig = make_digital_output_pulse(channel='ext1', duration=0.001, system=system)
+
 _, rf.shape_IDs = seq.register_rf_event(rf)
 for arm_i in range(0,n_TRs):
     curr_rf = copy.deepcopy(rf)
@@ -274,7 +290,11 @@ for arm_i in range(0,n_TRs):
     rf_inc = np.mod(rf_inc + quadratic_phase_increment, np.pi * 2)
     rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
 
-    seq.add_block(curr_rf, gzz)
+    if enable_trigger is True:
+        seq.add_block(trig, curr_rf, gzz)
+    else:
+        seq.add_block(curr_rf, gzz)
+        
     seq.add_block(TE_delay)
     if params['spiral']['arm_ordering'] == 'ga':
         seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
@@ -313,6 +333,9 @@ if params['user_settings']['show_plots']:
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
     plt.show()
+
+    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}])
+    plt.title('Gradient spectrum')
  
 # Detailed report if requested
 if params['user_settings']['detailed_rep']:
