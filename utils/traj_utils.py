@@ -51,7 +51,7 @@ def save_traj_dcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float, ndiscard,
     savemat(traj_path, {'kx': kx, 'ky': ky, 'w' : w, 'param': meta})
 
 
-def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float, adc_dwell: float = 1e-6, ndiscard: int = 10, show_plots=True):
+def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, ga_rotation, fov, res: float, adc_dwell: float = 1e-6, ndiscard: int = 10, show_plots=True):
     Nsample = int(k_traj_adc.shape[1]/n_TRs)
     Nsample2 = Nsample-ndiscard
     kx = k_traj_adc[0,:]
@@ -95,6 +95,7 @@ def save_traj_analyticaldcf(filename, k_traj_adc, n_TRs, n_int, fov, res: float,
         'spatial_resolution': float(res),
         'repetitions': n_TRs,
         'interleaves': n_int,
+        'ga_rotation': ga_rotation,
         'matrix_size': [fov[0]*10/res, fov[0]*10/res],
         'pre_discard': ndiscard,
         'dt': adc_dwell

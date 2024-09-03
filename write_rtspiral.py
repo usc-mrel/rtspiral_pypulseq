@@ -1,19 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pypulseq import Opts
-from pypulseq.make_sinc_pulse import make_sinc_pulse
-from pypulseq.make_arbitrary_grad import make_arbitrary_grad
-from pypulseq.make_trapezoid import make_trapezoid
-from pypulseq.make_delay import make_delay
-from pypulseq.calc_duration import calc_duration
-from pypulseq.calc_rf_center import calc_rf_center
-from pypulseq.make_adc import make_adc
+from pypulseq import (make_adc, make_sinc_pulse, make_arbitrary_grad, make_digital_output_pulse, make_delay, make_trapezoid, 
+                      calc_duration, calc_rf_center, 
+                      rotate, add_gradients)
 from pypulseq.Sequence.sequence import Sequence
-from pypulseq.make_digital_output_pulse import make_digital_output_pulse
-from pypulseq.rotate import rotate
-from pypulseq.add_gradients import add_gradients
-from utils.schedule_FA import schedule_FA
-from utils.load_params import load_params
+from utils import schedule_FA, load_params
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
@@ -347,7 +339,7 @@ if params['user_settings']['detailed_rep']:
 if params['user_settings']['write_seq']:
 
     import os
-    from utils.traj_utils import save_traj_dcf, save_traj_analyticaldcf
+    from utils.traj_utils import save_traj_analyticaldcf
 
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
     seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
@@ -372,7 +364,7 @@ if params['user_settings']['write_seq']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
     # save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
-    save_traj_analyticaldcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'])
+    save_traj_analyticaldcf(seq.signature_value, k_traj_adc, n_TRs, n_int, params['spiral']['GA_angle'], fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'])
 
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
     
