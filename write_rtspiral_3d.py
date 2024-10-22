@@ -1,17 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from pypulseq import Opts
-from pypulseq.make_sinc_pulse import make_sinc_pulse
-from pypulseq.make_arbitrary_rf import make_arbitrary_rf
-from pypulseq.make_arbitrary_grad import make_arbitrary_grad
-from pypulseq.make_trapezoid import make_trapezoid
-from pypulseq.make_delay import make_delay
-from pypulseq.calc_duration import calc_duration
-from pypulseq.calc_rf_center import calc_rf_center
-from pypulseq.make_adc import make_adc
-from pypulseq.Sequence.sequence import Sequence
-from pypulseq.rotate import rotate
-from pypulseq.add_gradients import add_gradients
+from pypulseq import (
+    Opts, make_sinc_pulse, make_arbitrary_rf, make_arbitrary_grad, 
+    make_trapezoid, make_delay, calc_duration, calc_rf_center, 
+    make_adc, Sequence, rotate, add_gradients
+)
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
 from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
