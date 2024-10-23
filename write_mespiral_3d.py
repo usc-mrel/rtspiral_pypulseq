@@ -1,14 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pypulseq import (
-    Opts, make_sinc_pulse, make_arbitrary_rf, make_arbitrary_grad, 
-    make_trapezoid, make_delay, calc_duration, calc_rf_center, 
-    make_adc, Sequence, rotate, add_gradients
+    make_sinc_pulse, make_arbitrary_rf, make_arbitrary_grad, 
+    make_trapezoid, make_delay, make_label, make_adc,
+    calc_duration, calc_rf_center, 
+    Opts, Sequence, rotate, add_gradients
 )
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
-from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
-from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
+from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
+from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -65,7 +66,7 @@ M = np.cumsum(g_grad, axis=0) * GRT
 grad_rew_method = 1
 # Design rew with gropt
 if grad_rew_method == 1:
-    from gropt.helper_utils import *
+    from gropt.helper_utils import get_min_TE_gfix
 
     # Method 1: GrOpt, separate optimization
     gropt_params = {}
@@ -350,6 +351,11 @@ for arm_i in range(0,n_TRs):
 
     seq.add_block(curr_rf, gzz)
 
+    # Add labels
+    seq.add_block(make_label(label='LIN', type='SET', value=idx['kspace_step_1'][arm_i]), 
+                  make_label(label='PAR', type='SET', value=idx['kspace_step_2'][arm_i]),
+                  make_label(label='ECO', type='SET', value=idx['contrast'][arm_i]))
+    
     # if we are doing 3D, then add the blips.
     if acquisition_type == '3D':
         seq.add_block(gzs[idx['kspace_step_2'][arm_i]])
