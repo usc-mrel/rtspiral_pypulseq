@@ -46,6 +46,11 @@ Tread = params['acquisition']['spiral']['ro_duration'] # [s]
 n_kz = params['acquisition']['kz_encoding']['repetitions']
 n_dummy = params['acquisition']['n_dummy']
 
+if type(params['acquisition']['TE']) is list:
+    n_eco = len(params['acquisition']['TE'])
+else:
+    n_eco = 1
+
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
 
@@ -203,7 +208,7 @@ elif params['acquisition']['spiral']['arm_ordering'] == 'ga':
 else:
     raise Exception("Unknown arm ordering") 
 
-
+# TODO: Combine slice rewinder and partition encoding to reduce min TE.
 # set the kz encoding if it is a 3D acquisition.
 acquisition_type = '3D' if 'kz_encoding' in params['acquisition'] else '2D'
 gzs = []
@@ -230,24 +235,40 @@ if acquisition_type == '3D':
 # Set the delays
 
 # TE 
-if params['acquisition']['TE'] == 0:
-    TEd = 0
-    TE = rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) - gzr.delay + gsp_x.delay
-    if acquisition_type == '3D':
-        TE = TE + calc_duration(gzs[0])
-    print(f'Min TE is set: {TE*1e3:.3f} ms.')
-    params['acquisition']['TE'] = TE
-else:
-    TE = params['acquisition']['TE']*1e-3
-    TEd = TE - (rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) + gsp_x.delay)
-    if acquisition_type == '3D': 
-        TEd = TEd - calc_duration(gzs[0])
-    assert TEd >= 0, "Required TE can not be achieved."
+if n_eco == 1:
+    if params['acquisition']['TE'] == 0:
+        TEd = 0
+        TE = rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) - gzr.delay + gsp_x.delay
+        if acquisition_type == '3D':
+            TE = TE + calc_duration(gzs[0])
+        print(f'Min TE is set: {TE*1e3:.3f} ms.')
+        params['acquisition']['TE'] = TE
+    else:
+        TE = params['acquisition']['TE']*1e-3
+        TEd = TE - (rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) + gsp_x.delay)
+        if acquisition_type == '3D': 
+            TEd = TEd - calc_duration(gzs[0])
+        assert TEd >= 0, "Required TE can not be achieved."
+elif n_eco > 1:
+    TEd = []
+    TE = [te_*1e-3 for te_ in params['acquisition']['TE']]
+    TEd.append(TE[0] - (rf.shape_dur - calc_rf_center(rf)[0] 
+                        + calc_duration(gzr) - gzr.delay + calc_duration(gzs[0]) 
+                        + gsp_x.delay))
+
+    assert TEd[0] >= 0, "Required TE can not be achieved."
+
+    for eco_i in range(1, n_eco):
+        TEd.append(TE[eco_i] - (TE[eco_i-1] + calc_duration(gsp_xs[0], gsp_ys[0], adc) + gsp_x.delay))
+
+        assert TEd[eco_i] >= 0, f"Required TE for eco {eco_i} can not be achieved."
 
 # TR
+TE_last = TE if n_eco == 1 else TE[-1]
+
 if params['acquisition']['TR'] == 0:
     TRd = 0
-    TR = calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc)
+    TR = calc_rf_center(rf)[0] + TE_last + calc_duration(gsp_xs[0], gsp_ys[0], adc)
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         TR = TR + calc_duration(gz_crush)
     if acquisition_type == '3D':
@@ -256,14 +277,14 @@ if params['acquisition']['TR'] == 0:
     params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
-    TRd = TR - (calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc))
+    TRd = TR - (calc_rf_center(rf)[0] + TE_last + calc_duration(gsp_xs[0], gsp_ys[0], adc))
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         TRd = TRd - calc_duration(gz_crush)
     if acquisition_type == '3D':
         TRd = TRd - (calc_duration(gzs[0]) * 2)
     assert TRd >= 0, "Required TR can not be achieved."
 
-TE_delay = make_delay(TEd)
+# TE_delay = make_delay(TEd)
 TR_delay = make_delay(TRd)
 # Sequence looping
 
@@ -315,8 +336,9 @@ for dumm_i in range(0,n_dummy):
     if acquisition_type == '3D':
         seq.add_block(gzs[0])
 
-    seq.add_block(TE_delay)
-    seq.add_block(gsp_xs[0], gsp_ys[0])
+    for eco_i in range(0, n_eco):
+        seq.add_block(make_delay(TEd[eco_i]))
+        seq.add_block(gsp_xs[0], gsp_ys[0])
 
     # if we are doing 3D, add 3D rewinder.
     if acquisition_type == '3D':
@@ -360,9 +382,9 @@ for arm_i in range(0,n_TRs):
     if acquisition_type == '3D':
         seq.add_block(gzs[idx['kspace_step_2'][arm_i]])
 
-    seq.add_block(TE_delay)
-
-    seq.add_block(gsp_xs[idx['kspace_step_1'][arm_i]], gsp_ys[idx['kspace_step_1'][arm_i]], adc)
+    for eco_i in range(0, n_eco):
+        seq.add_block(make_delay(TEd[eco_i]))
+        seq.add_block(gsp_xs[idx['kspace_step_1'][arm_i]], gsp_ys[idx['kspace_step_1'][arm_i]], adc)
 
     # if we are doing 3D, add 3D rewinder.
     if acquisition_type == '3D':
@@ -392,7 +414,10 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
+    from matplotlib.widgets import Cursor
     seq.plot(show_blocks=False, grad_disp='mT/m', plot_now=False, time_disp='ms')
+    ax = plt.gca()
+    cursor = Cursor(ax, useblit=True, color='red', linewidth=2)
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
     if acquisition_type=='3D': 
