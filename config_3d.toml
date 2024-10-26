@@ -20,7 +20,7 @@ flip_angle      = 12     # degrees
 rf_duration     = 1e-3   # [s]
 
 TR              = 0      # [ms], 0 for min TR
-TE              = [1.0, 6.6]      # [ms], list of echo times, 0 for min TE and single echo
+TE              = [0.81, 6.6]      # [ms], list of echo times, 0 for min TE and single echo
 
 n_dummy         = 30     # Number of dummy scans
 

@@ -47,8 +47,10 @@ n_kz = params['acquisition']['kz_encoding']['repetitions']
 n_dummy = params['acquisition']['n_dummy']
 
 if type(params['acquisition']['TE']) is list:
+    TEs = params['acquisition']['TE']
     n_eco = len(params['acquisition']['TE'])
 else:
+    TEs = [params['acquisition']['TE']]
     n_eco = 1
 
 # Design the spiral trajectory
@@ -62,7 +64,7 @@ t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # Generate encoding indices
 
-idx = generate_encoding_indices(n_int, n_kz, n_rep=params['acquisition']['repetitions'], kz_ordering='linear', kspace_ordering='arm')
+idx = generate_encoding_indices(n_int, n_kz, n_eco=n_eco, n_rep=params['acquisition']['repetitions'], kz_ordering='linear', kspace_ordering='arm')
 
 # === design rewinder ===
 T_rew = 1.2e-3
@@ -138,19 +140,21 @@ else: #params['acquisition']['excitation'] == 'slr':
                                system=system, return_gz=True, use="excitation")
     gzr = make_trapezoid(channel='z', area=-gz.area/2, system=system)
 
-gzrr = copy.deepcopy(gzr)
-gzrr.delay = 0 #gz.delay
-rf.delay = calc_duration(gzrr) + gz.rise_time
+# gzrr = copy.deepcopy(gzr)
+# gzrr.delay = 0 #gz.delay
+# rf.delay = calc_duration(gzrr) + gz.rise_time
 
 additional_delay = 0
 if rf.delay < params['system']['rf_dead_time']:
     # unfortunately, we have to artificially increase the delay.
     additional_delay = params['system']['rf_dead_time'] - rf.delay
 
-rf.delay = rf.delay + additional_delay
-gz.delay = calc_duration(gzrr) + additional_delay
-gzr.delay = calc_duration(gzrr, gz)
-gzz = add_gradients([gzrr, gz, gzr], system=system)
+# rf.delay = rf.delay + additional_delay
+# gz.delay = gz.delay
+# gz.delay = calc_duration(gzrr) + additional_delay
+# gzr.delay = calc_duration(gzrr, gz)
+# gzz = add_gradients([gzrr, gz], system=system)
+gzz = gz
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
@@ -171,9 +175,10 @@ gsp_y.first = 0
 gsp_y.last = 0
 
 # Set the Slice rewinder balance gradients delay
-gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
+# gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
 
 # create a crusher gradient (only for FLASH)
+# TODO: for 3D area should depend on partition index. That is why it can be advantageous to put it Gx and Gy.
 gz_crush = 0
 crush_area = (4 / (params['acquisition']['slice_thickness'] * 1e-3)) + (-1 * gzr.area)
 gz_crush = make_trapezoid(channel='z', 
@@ -212,63 +217,69 @@ else:
 # set the kz encoding if it is a 3D acquisition.
 acquisition_type = '3D' if 'kz_encoding' in params['acquisition'] else '2D'
 gzs = []
+gz_rewind = []
+
 dummy_trap = make_trapezoid(channel="z", area=0, system=system)
 kz_encoding_str = ''
-if acquisition_type == '3D':
-    kz_fov = params['acquisition']['kz_encoding']['FOV'] * 1e-3
-    nkz = params['acquisition']['kz_encoding']['repetitions']
-    phase_areas = (np.arange(nkz) - (nkz / 2)) * (1 / kz_fov)
 
-    # make the largest trapezoid, and use it's duration for all of them.
-    dummy_trap = make_trapezoid(channel="z", area=phase_areas[0], system=system)
+kz_fov = params['acquisition']['kz_encoding']['FOV'] * 1e-3
+nkz = params['acquisition']['kz_encoding']['repetitions']
+phase_areas = (np.arange(nkz) - (nkz / 2)) * (1 / kz_fov) + gzr.area
+max_phase_area_idx = np.argmax(np.abs(phase_areas))
 
-    kz_encoding_str = params['acquisition']['kz_encoding']['ordering'] 
-    print(f"Kz encoding ordering is {kz_encoding_str}.")
+phase_rewind_areas = -(np.arange(nkz) - (nkz / 2)) * (1 / kz_fov) + gzr.area
+max_phase_rewind_area_idx = np.argmax(np.abs(phase_rewind_areas))
 
-    for i in range(0, nkz):
-        gzs.append(make_trapezoid(channel='z', area=phase_areas[i], duration=calc_duration(dummy_trap), system=system))
+# make the largest trapezoid, and use it's duration for all of them.
+dummy_trap = make_trapezoid(channel="z", area=phase_areas[max_phase_area_idx], system=system)
+dummy_trap_rewind = make_trapezoid(channel="z", area=phase_rewind_areas[max_phase_rewind_area_idx], system=system)
 
-    # add the stack-type to the kz encoding string
-    kz_encoding_str = kz_encoding_str + '_' +\
-        params['acquisition']['kz_encoding']['rotation_type']
+kz_encoding_str = params['acquisition']['kz_encoding']['ordering'] 
+print(f"Kz encoding ordering is {kz_encoding_str}.")
+
+for i in range(0, nkz):
+    gzs.append(make_trapezoid(channel='z', area=phase_areas[i], duration=calc_duration(dummy_trap), system=system))
+    gz_rewind.append(make_trapezoid(channel='z', area=phase_rewind_areas[i], duration=calc_duration(dummy_trap_rewind), system=system))
+
+# add the stack-type to the kz encoding string
+kz_encoding_str = kz_encoding_str + '_' +\
+    params['acquisition']['kz_encoding']['rotation_type']
 
 # Set the delays
 
 # TE 
-if n_eco == 1:
-    if params['acquisition']['TE'] == 0:
-        TEd = 0
-        TE = rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) - gzr.delay + gsp_x.delay
-        if acquisition_type == '3D':
-            TE = TE + calc_duration(gzs[0])
-        print(f'Min TE is set: {TE*1e3:.3f} ms.')
-        params['acquisition']['TE'] = TE
-    else:
-        TE = params['acquisition']['TE']*1e-3
-        TEd = TE - (rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzr) + gsp_x.delay)
-        if acquisition_type == '3D': 
-            TEd = TEd - calc_duration(gzs[0])
-        assert TEd >= 0, "Required TE can not be achieved."
-elif n_eco > 1:
-    TEd = []
-    TE = [te_*1e-3 for te_ in params['acquisition']['TE']]
-    TEd.append(TE[0] - (rf.shape_dur - calc_rf_center(rf)[0] 
-                        + calc_duration(gzr) - gzr.delay + calc_duration(gzs[0]) 
-                        + gsp_x.delay))
+# if n_eco == 1:
+#     if params['acquisition']['TE'] == 0:
+#         TEd = 0
+#         TE = rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzs[0]) + gsp_x.delay
+#         if acquisition_type == '3D':
+#             TE = TE + calc_duration(gzs[0])
+#         print(f'Min TE is set: {TE*1e3:.3f} ms.')
+#         params['acquisition']['TE'] = TE
+#     else:
+#         TE = params['acquisition']['TE']*1e-3
+#         TEd = TE - (rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzs[0]) + gsp_x.delay)
+#         if acquisition_type == '3D': 
+#             TEd = TEd - calc_duration(gzs[0])
+#         assert TEd >= 0, "Required TE can not be achieved."
+# elif n_eco > 1:
+TEd = []
+TE = [te_*1e-3 for te_ in TEs]
+TEd.append(TE[0] - (rf.shape_dur - calc_rf_center(rf)[0] 
+                    + calc_duration(gzs[0]) 
+                    + gsp_x.delay))
 
-    assert TEd[0] >= 0, "Required TE can not be achieved."
+assert TEd[0] >= 0, "Required TE can not be achieved."
 
-    for eco_i in range(1, n_eco):
-        TEd.append(TE[eco_i] - (TE[eco_i-1] + calc_duration(gsp_xs[0], gsp_ys[0], adc) + gsp_x.delay))
+for eco_i in range(1, n_eco):
+    TEd.append(TE[eco_i] - (TE[eco_i-1] + calc_duration(gsp_xs[0], gsp_ys[0], adc) + gsp_x.delay))
 
-        assert TEd[eco_i] >= 0, f"Required TE for eco {eco_i} can not be achieved."
+    assert TEd[eco_i] >= 0, f"Required TE for eco {eco_i} can not be achieved."
 
 # TR
-TE_last = TE if n_eco == 1 else TE[-1]
-
 if params['acquisition']['TR'] == 0:
     TRd = 0
-    TR = calc_rf_center(rf)[0] + TE_last + calc_duration(gsp_xs[0], gsp_ys[0], adc)
+    TR = calc_rf_center(rf)[0] + TE[-1] + calc_duration(gsp_xs[0], gsp_ys[0], adc)
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         TR = TR + calc_duration(gz_crush)
     if acquisition_type == '3D':
@@ -277,7 +288,7 @@ if params['acquisition']['TR'] == 0:
     params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
-    TRd = TR - (calc_rf_center(rf)[0] + TE_last + calc_duration(gsp_xs[0], gsp_ys[0], adc))
+    TRd = TR - (calc_rf_center(rf)[0] + TE[-1]  + calc_duration(gsp_xs[0], gsp_ys[0], adc))
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
         TRd = TRd - calc_duration(gz_crush)
     if acquisition_type == '3D':
@@ -333,19 +344,14 @@ for dumm_i in range(0,n_dummy):
     seq.add_block(curr_rf, gzz)
 
     # if we are doing 3D, then add the blips.
-    if acquisition_type == '3D':
-        seq.add_block(gzs[0])
+    seq.add_block(gzs[0])
 
     for eco_i in range(0, n_eco):
         seq.add_block(make_delay(TEd[eco_i]))
         seq.add_block(gsp_xs[0], gsp_ys[0])
 
     # if we are doing 3D, add 3D rewinder.
-    if acquisition_type == '3D':
-        gz_rewind = gzs[0]
-        gz_rewind.amplitude = -gz_rewind.amplitude
-        seq.add_block(gz_rewind)
-        gz_rewind.amplitude = -gz_rewind.amplitude
+    seq.add_block(gz_rewind[0])
 
     # additional crushing if necessary.
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
@@ -378,20 +384,13 @@ for arm_i in range(0,n_TRs):
                   make_label(label='PAR', type='SET', value=idx['kspace_step_2'][arm_i]),
                   make_label(label='ECO', type='SET', value=idx['contrast'][arm_i]))
     
-    # if we are doing 3D, then add the blips.
-    if acquisition_type == '3D':
-        seq.add_block(gzs[idx['kspace_step_2'][arm_i]])
+    seq.add_block(gzs[idx['kspace_step_2'][arm_i]])
 
     for eco_i in range(0, n_eco):
         seq.add_block(make_delay(TEd[eco_i]))
         seq.add_block(gsp_xs[idx['kspace_step_1'][arm_i]], gsp_ys[idx['kspace_step_1'][arm_i]], adc)
 
-    # if we are doing 3D, add 3D rewinder.
-    if acquisition_type == '3D':
-        gz_rewind = gzs[idx['kspace_step_2'][arm_i]]
-        gz_rewind.amplitude = -gz_rewind.amplitude
-        seq.add_block(gz_rewind)
-        gz_rewind.amplitude = -gz_rewind.amplitude
+    seq.add_block(gz_rewind[idx['kspace_step_2'][arm_i]])
 
     # additional crushing if necessary.
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
@@ -476,7 +475,7 @@ if params['user_settings']['write_seq']:
 
     # save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
     save_3Dtraj(seq.signature_value, k_traj_adc, 
-                n_TRs, n_int, params['acquisition']['spiral']['GA_angle'], 
+                n_TRs, n_eco, n_int, params['acquisition']['spiral']['GA_angle'], 
                 idx, fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'])
 
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
