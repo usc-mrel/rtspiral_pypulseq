@@ -380,17 +380,17 @@ for arm_i in range(0,n_TRs):
     seq.add_block(curr_rf, gzz)
 
     # Add labels
-    seq.add_block(make_label(label='LIN', type='SET', value=idx['kspace_step_1'][arm_i]), 
-                  make_label(label='PAR', type='SET', value=idx['kspace_step_2'][arm_i]),
-                  make_label(label='ECO', type='SET', value=idx['contrast'][arm_i]))
+    seq.add_block(make_label(label='LIN', type='SET', value=idx['kspace_step_1'][::n_eco][arm_i]), 
+                  make_label(label='PAR', type='SET', value=idx['kspace_step_2'][::n_eco][arm_i]))
     
-    seq.add_block(gzs[idx['kspace_step_2'][arm_i]])
+    seq.add_block(gzs[idx['kspace_step_2'][::n_eco][arm_i]])
 
     for eco_i in range(0, n_eco):
+        seq.add_block(make_label(label='ECO', type='SET', value=eco_i))
         seq.add_block(make_delay(TEd[eco_i]))
-        seq.add_block(gsp_xs[idx['kspace_step_1'][arm_i]], gsp_ys[idx['kspace_step_1'][arm_i]], adc)
+        seq.add_block(gsp_xs[idx['kspace_step_1'][::n_eco][arm_i]], gsp_ys[idx['kspace_step_1'][::n_eco][arm_i]], adc)
 
-    seq.add_block(gz_rewind[idx['kspace_step_2'][arm_i]])
+    seq.add_block(gz_rewind[idx['kspace_step_2'][::n_eco][arm_i]])
 
     # additional crushing if necessary.
     if params['acquisition']['spiral']['contrast'] in ('FLASH', 'FISP'):
@@ -462,7 +462,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    seq_filename = f"spiral_{acquisition_type}_{kz_encoding_str}_{params['acquisition']['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['acquisition']['spiral']['arm_ordering']}{params['acquisition']['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['acquisition']['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_{acquisition_type}_{kz_encoding_str}_{params['acquisition']['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['acquisition']['spiral']['arm_ordering']}{params['acquisition']['spiral']['GA_angle']}_nTR{n_TRs}_neco{n_eco}_Tread{params['acquisition']['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
     seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")

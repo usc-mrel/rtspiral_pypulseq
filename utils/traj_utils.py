@@ -172,9 +172,9 @@ def generate_encoding_indices(n_int, n_kz, n_rep=1, n_eco=1, kz_ordering='linear
     n_tr = n_int * n_kz * n_eco * n_rep
 
     if kspace_ordering == 'arm':
-        kspace_step_1 = [ii % n_int for ii in range(n_tr)]
+        kspace_step_1 = [ii//n_eco % n_int for ii in range(n_tr)]
         if kz_ordering == 'linear':
-            kspace_step_2 = [(ii//n_int) % n_kz for ii in range(n_tr)]
+            kspace_step_2 = [(ii//n_int//n_eco) % n_kz for ii in range(n_tr)]
         # TODO: Fix ping-pong ordering.
         elif kz_ordering == 'ping-pong':
             kspace_step_2 = []
