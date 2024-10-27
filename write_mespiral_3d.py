@@ -34,7 +34,7 @@ GRT = params['system']['grad_raster_time']
 
 spiral_sys = {
     'max_slew'          :  params['system']['max_slew']*params['acquisition']['spiral']['slew_ratio'],   # [T/m/s] 
-    'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
+    'max_grad'          :  params['system']['max_grad']*0.99,   # [mT/m] 
     'adc_dwell'         :  params['acquisition']['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
     'os'                :  8
@@ -55,7 +55,7 @@ else:
 
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
-
+n_int = int(n_int * params['acquisition']['spiral']['inplane_os'])
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
@@ -247,22 +247,6 @@ kz_encoding_str = kz_encoding_str + '_' +\
 
 # Set the delays
 
-# TE 
-# if n_eco == 1:
-#     if params['acquisition']['TE'] == 0:
-#         TEd = 0
-#         TE = rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzs[0]) + gsp_x.delay
-#         if acquisition_type == '3D':
-#             TE = TE + calc_duration(gzs[0])
-#         print(f'Min TE is set: {TE*1e3:.3f} ms.')
-#         params['acquisition']['TE'] = TE
-#     else:
-#         TE = params['acquisition']['TE']*1e-3
-#         TEd = TE - (rf.shape_dur - calc_rf_center(rf)[0] + calc_duration(gzs[0]) + gsp_x.delay)
-#         if acquisition_type == '3D': 
-#             TEd = TEd - calc_duration(gzs[0])
-#         assert TEd >= 0, "Required TE can not be achieved."
-# elif n_eco > 1:
 TEd = []
 TE = [te_*1e-3 for te_ in TEs]
 TEd.append(TE[0] - (rf.shape_dur - calc_rf_center(rf)[0] 
@@ -451,17 +435,17 @@ if params['user_settings']['write_seq']:
     from utils.traj_utils import save_3Dtraj
 
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
-    #if acquisition_type == '2D':
-    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
-    # else:
-    #    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['kz_encoding']['FOV']/params['acquisition']['kz_encoding']['repetitions']*1e-3)
+    seq.set_definition(key="SliceThickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
-    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="TE", value=TE)
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
+    seq.set_definition(key="kSpaceCenterSample", value=0)
+    seq.set_definition(key="kSpaceCenterLine", value=0)
+    seq.set_definition(key="kSpaceCenterPartition", value=n_eco*n_int*(n_kz//2))
+
     seq_filename = f"spiral_{acquisition_type}_{kz_encoding_str}_{params['acquisition']['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['acquisition']['spiral']['arm_ordering']}{params['acquisition']['spiral']['GA_angle']}_nTR{n_TRs}_neco{n_eco}_Tread{params['acquisition']['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
