@@ -11,9 +11,19 @@ from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 import copy
+import argparse
 
+# Cmd args
+parser = argparse.ArgumentParser(
+                    prog='Write2DRTSpiral',
+                    description='Generates a 2D real-time spiral Pulseq sequence for given parameters.')
+
+parser.add_argument('-c', '--config', type=str, default='config', help='Config file path.')
+
+args = parser.parse_args()
+print(f'Using config file: {args.config}.')
 # Load and prep system and sequence parameters
-params = load_params('config', './')
+params = load_params(args.config, './')
 
 system = Opts(
     max_grad = params['system']['max_grad'], grad_unit="mT/m",
@@ -54,7 +64,7 @@ grad_rew_method = params['spiral']['grad_rew_method']
 T_rew = params['spiral']['rewinder_time']
 # Design rew with gropt
 if grad_rew_method == 'gropt':
-    from gropt.helper_utils import *
+    from gropt.helper_utils import get_min_TE_gfix
 
     # Method 1: GrOpt, separate optimization
     gropt_params = {}

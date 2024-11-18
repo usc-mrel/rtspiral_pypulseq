@@ -1,0 +1,49 @@
+[system]
+
+max_grad          =     26 # [mT/m]
+max_slew          =    140 # [T/m/s]
+grad_raster_time  =  10e-6 # [s]
+rf_raster_time    =   1e-6 # [s]
+rf_ringdown_time  =  10e-6 # [s]
+rf_dead_time      = 100e-6 # [s]
+adc_dead_time     =  10e-6 # [s]
+
+[spiral]
+
+contrast     = 'trueFISP'
+slew_ratio   = 0.8  # How much of the system slew rate to be used for spiral design.  
+ro_duration  = 3e-3 # [s] Readout duration
+adc_dwell    = 2e-6 # [s]
+arm_ordering = 'linear' # 'linear', 'ga', 'linear_custom'
+GA_steps     = 144      # Number of unique GA_steps, determines the duration of 1 repetition. Only enabled if 'ga' or 'tinyga' is selected.
+GA_angle     = 137.5078   # [deg], 222.4922, 137.5078, 111.2461
+custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
+# Note: custom_order assumes the number of interleaves, and does not work if it does not match.
+grad_rew_method = 'gropt' # 'gropt', 'ext_trap_area', 'exact_time' - What method to use design spiral rewinders. GrOpt requires successfull compilation of the library.
+rewinder_time   = 0.8e-3 # [s] Exact rew time for 'grad_rew_method' = 'exact_time', max rew time for grad_rew_method = 'gropt'
+
+[acquisition]
+
+resolution      = 3       # [mm]
+fov             = [40]  # [cm]
+slice_thickness = 15       # [mm]
+
+flip_angle      = 100    # [deg]
+rf_duration     = 1e-3  # [s]
+
+TR              = 0     # [ms], 0 for min TR
+TE              = 0     # [ms], 0 for min TE
+
+repetitions     = 1
+
+[acquisition.options]
+
+ramped_rf_ibrahim = false
+T1 = 1 # [s]
+
+[user_settings]
+
+write_seq    = true
+filename_ext = '' # This will be attached to the filename
+show_plots   = false
+detailed_rep = true
