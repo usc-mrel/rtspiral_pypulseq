@@ -42,7 +42,7 @@ GRT = params['system']['grad_raster_time']
 
 spiral_sys = {
     'max_slew'          :  params['system']['max_slew']*params['spiral']['slew_ratio'],   # [T/m/s] 
-    'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
+    'max_grad'          :  params['system']['max_grad']*0.99,   # [mT/m] 
     'adc_dwell'         :  params['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
     'os'                :  8
