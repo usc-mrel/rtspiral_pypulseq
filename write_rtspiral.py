@@ -6,12 +6,15 @@ from pypulseq import (make_adc, make_sinc_pulse, make_arbitrary_grad, make_digit
                       rotate, add_gradients)
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
-from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
+from utils.traj_utils import save_metadata
+from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 import copy
 import argparse
+import os
+import warnings
 
 # Cmd args
 parser = argparse.ArgumentParser(
@@ -168,6 +171,9 @@ gsp_xs = []
 gsp_ys = []
 print(f"Spiral arm ordering is {params['spiral']['arm_ordering']}.")
 if params['spiral']['arm_ordering'] == 'linear':
+    if (n_int%2) == 1 and (params['acquisition']['repetitions']%2) == 1:
+        warnings.warn("Number of interleaves is odd. To solve this, we increased it by 1. If this is undesired, please set repetitions to an even number instead.")
+        n_int += 1
     for i in range(0, n_int):
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=2*np.pi*i/n_int)
         gsp_xs.append(gsp_x_rot)
@@ -177,7 +183,6 @@ if params['spiral']['arm_ordering'] == 'linear':
 elif params['spiral']['arm_ordering'] == 'ga':
     n_TRs = params['spiral']['GA_steps']
     if (n_TRs%2) == 1 and (params['acquisition']['repetitions']%2) == 1:
-        import warnings
         warnings.warn(
                     '''
                       ========================================
@@ -320,7 +325,7 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=False, grad_disp='mT/m', plot_now=False, time_disp='ms')
+    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms')
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
@@ -334,10 +339,11 @@ if params['user_settings']['show_plots']:
     plt.xlabel('$k_x [mm^{-1}]$')
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
-    plt.show()
 
     seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}])
     plt.title('Gradient spectrum')
+    plt.show()
+
  
 # Detailed report if requested
 if params['user_settings']['detailed_rep']:
@@ -348,9 +354,6 @@ if params['user_settings']['detailed_rep']:
 # Write the sequence to file
 if params['user_settings']['write_seq']:
 
-    import os
-    from utils.traj_utils import save_traj_analyticaldcf
-
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
     seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
@@ -358,7 +361,7 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']:.4f}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
     seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")
@@ -374,7 +377,17 @@ if params['user_settings']['write_seq']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
     # save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
-    save_traj_analyticaldcf(seq.signature_value, k_traj_adc, n_TRs, n_int, params['spiral']['GA_angle'], fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'])
+    params_save = {
+        'adc_dwell': spiral_sys['adc_dwell'],
+        'ndiscard': ndiscard,
+        'n_TRs': n_TRs,
+        'n_int': n_int,
+        'ga_rotation': params['spiral']['GA_angle'],
+        'fov': fov,
+        'spatial_resolution': res,
+        'arm_ordering': params['spiral']['arm_ordering'],
+    }
+    save_metadata(seq.signature_value, k_traj_adc, params_save, params['user_settings']['show_plots'], dcf_method="hoge", out_dir="out_trajectory")
 
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
     
