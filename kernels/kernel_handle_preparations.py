@@ -5,19 +5,24 @@ from kernels.kernel_crusher import kernel_crusher
 from kernels.kernel_tag_radial_AM import kernel_tag_radial_AM
 from kernels.kernel_trigger import kernel_trigger
 
+def append_string(struct, index, string):
+    if 'include_in_filename' in struct.keys() and index in struct.keys():
+        return string + str(struct[index]) + '_'
+    else:
+        return string 
 
 def prep_func(prep_table_str, seq, param, system, rf=None, gz=None):
     output_string = ''
     if prep_table_str in param:
         for prep in param[prep_table_str]:
             if prep['enabled'] == True:
-                output_string += prep['type'] + '_'
+                output_string = append_string(prep, 'type', output_string)
                 if prep['type'] == 'trigger':
                     kernel_trigger(seq, prep, param, system)
                 if prep['type'] == 'tagging':
-                    output_string += prep['tag_type'] + '_'
+                    output_string = append_string(prep, 'tag_type', output_string)
                     if prep['tag_type'] == 'grid':
-                        output_string += str(prep['grid_tag_spacing']) + '_'
+                        output_string = append_string(prep, 'grid_tag_spacing', output_string)
                         kernel_tag_SPAMM_REALTAG(seq, prep, param, system)
                     if prep['tag_type'] == 'radial':
                         kernel_tag_radial_AM(seq, prep, param, system)
@@ -35,11 +40,11 @@ def prep_func(prep_table_str, seq, param, system, rf=None, gz=None):
 
 def kernel_handle_preparations(seq, param, system, rf=None, gz=None):
     prep_str = prep_func('preparations', seq, param, system, rf=rf, gz=gz)
-    return 'prep' + prep_str if prep_str != '' and prep_str != '_' else prep_str
+    return prep_str if prep_str != '' and prep_str != '_' else prep_str
  
 
 def kernel_handle_end_preparations(seq, param, system, rf=None, gz=None):
     end_prep_str = prep_func('end_preparations', seq, param, system, rf=rf, gz=gz)
-    return 'endprep' + end_prep_str if end_prep_str != '' and end_prep_str != '_' else end_prep_str
+    return end_prep_str if end_prep_str != '' and end_prep_str != '_' else end_prep_str
 
   

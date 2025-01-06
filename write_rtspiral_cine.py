@@ -8,9 +8,9 @@ from pypulseq.make_delay import make_delay
 from pypulseq.calc_duration import calc_duration
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
-from pypulseq.make_label import make_label
 from pypulseq.Sequence.sequence import Sequence
 from pypulseq.rotate import rotate
+from pypulseq.make_label import make_label
 from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
@@ -21,8 +21,11 @@ from kernels.kernel_handle_preparations import kernel_handle_preparations, kerne
 from math import ceil
 import copy
 
+# make tkagg the default backend
+#plt.switch_backend('tkagg')
+
 # Load and prep system and sequence parameters
-params = load_params('config_speech_tagging', './')
+params = load_params('config', './')
 
 system = Opts(
     max_grad = params['system']['max_grad'], grad_unit="mT/m",
@@ -48,7 +51,6 @@ fov   = params['acquisition']['fov'] # [cm]
 res   = params['acquisition']['resolution'] # [mm]
 Tread = params['spiral']['ro_duration'] # [s]
 
-
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
 
@@ -57,7 +59,7 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # === design rewinder ===
-T_rew = 0.8e-3
+T_rew = 1.2e-3
 M = np.cumsum(g_grad, axis=0) * GRT
 
 grad_rew_method = 2
@@ -68,7 +70,7 @@ if grad_rew_method == 1:
     # Method 1: GrOpt, separate optimization
     gropt_params = {}
     gropt_params['mode'] = 'free'
-    gropt_params['gmax'] = params['system']['max_grad']*0.77*1e-3 # [mT/m] -> [T/m]
+    gropt_params['gmax'] = params['system']['max_grad']*1e-3 * 0.7 # [mT/m] -> [T/m]
     gropt_params['smax'] = params['system']['max_slew']*params['spiral']['slew_ratio']
     gropt_params['dt']   = GRT
 
@@ -220,14 +222,15 @@ TR_delay = make_delay(TRd)
 
 seq = Sequence(system)
 
-# handle any preparation pulses.
-prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gzz)
-
 # useful for end_peparation pulses.
 params['flip_angle_last'] = params['acquisition']['flip_angle']
 
+# CINE parameters
+n_phases = 40 
+n_tr_per_phase = 6
+
 # tagging pulse pre-prep (only if fa_schedule exists)
-rf_amplitudes, FA_schedule_str = schedule_FA(params, n_TRs)
+rf_amplitudes, FA_schedule_str = schedule_FA(params, n_phases*n_tr_per_phase)
 
 # used for FLASH only: set rf spoiling increment.
 rf_phase = 0
@@ -245,37 +248,60 @@ else:
     quadratic_phase_increment = 0
     params['spiral']['contrast'] = 'trueFISP'
 
+
+
+# CINE trigger
+from pypulseq.make_trigger import make_trigger
+trigger = make_trigger('physio1', duration=2000e-6, system=system)
+
+n_TRs = 0
+
 _, rf.shape_IDs = seq.register_rf_event(rf)
-for arm_i in range(0,n_TRs):
-    curr_rf = copy.deepcopy(rf)
+for idx in range(np.ceil(len(gsp_xs)/n_tr_per_phase).astype(int)):
+    # add trigger FIRST
+    seq.add_block(trigger) 
 
-    # check if we are using a rammped FA scheme (rf_amplitudes is a list []) 
-    if len(rf_amplitudes) > 0:
-        if arm_i >= len(rf_amplitudes):
-            n_TRs = arm_i
-            break
-        curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
-    
-    curr_rf.phase_offset = rf_phase
-    adc.phase_offset = rf_phase
+    # handle any preparation pulses.
+    prep_str = kernel_handle_preparations(seq, params, system, rf=rf, gz=gzz)
 
-    rf_inc = np.mod(rf_inc + quadratic_phase_increment, np.pi * 2)
-    rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
+    for phase_i in range(0, n_phases):
+        for tr_i in range(0, n_tr_per_phase):
 
-    seq.add_block(curr_rf, gzz)
-    seq.add_block(TE_delay)
-    if params['spiral']['arm_ordering'] == 'ga':
-        seq.add_block(make_label('LIN', 'SET', arm_i % params['spiral']['GA_steps']))
-        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
-    else:
-        seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
-        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
-    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        seq.add_block(gz_crush)
-    seq.add_block(TR_delay)
+            rf_idx = tr_i + (phase_i * n_tr_per_phase)
+            idx_ = idx*n_tr_per_phase + tr_i
 
-# handle any end_preparation pulses.
-end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gzz)
+            # LABEL EXTENSIONS
+            seq.add_block(make_label('PHS', 'SET', idx))
+            seq.add_block(make_label('LIN', 'SET', idx_ % n_int))
+
+            print("LIN set to: ", idx_ % n_int)
+
+            curr_rf = copy.deepcopy(rf)
+            # check if we are using a rammped FA scheme (rf_amplitudes is a list []) 
+            if len(rf_amplitudes) > 0:
+                if idx_ >= len(rf_amplitudes):
+                    n_TRs += idx_ 
+                    break
+                curr_rf.signal = rf.signal * rf_amplitudes[rf_idx] / np.deg2rad(params['acquisition']['flip_angle'])
+            n_TRs += 1
+            curr_rf.phase_offset = rf_phase
+            adc.phase_offset = rf_phase
+            rf_inc = np.mod(rf_inc + quadratic_phase_increment, np.pi * 2)
+            rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
+
+            seq.add_block(curr_rf, gzz)
+            seq.add_block(TE_delay)
+            if params['spiral']['arm_ordering'] == 'ga':
+                seq.add_block(gsp_xs[idx_ % params['spiral']['GA_steps']], gsp_ys[idx_ % params['spiral']['GA_steps']], adc) 
+            else:
+                seq.add_block(gsp_xs[idx_ % n_int], gsp_ys[idx_% n_int], adc)
+            if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+                seq.add_block(gz_crush)
+            seq.add_block(TR_delay) 
+
+    # handle any end_preparation pulses.
+    end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gzz)
+
 
 # Quick timing check
 ok, error_report = seq.check_timing()
@@ -335,7 +361,15 @@ if params['user_settings']['write_seq']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
     # save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
-    save_traj_analyticaldcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'],seq=seq, save_h5=True, spiral_sys=spiral_sys)
+    save_traj_analyticaldcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'], seq=seq, save_h5=True, spiral_sys=spiral_sys)
 
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
-    
+
+
+save_config = True
+if save_config:
+    # copy config.toml to config_examples/ with seqfilename_seqhash.toml
+    import shutil
+    config_filename = f"{seq_filename}_{seq.signature_value}.toml"
+    shutil.copyfile('config.toml', os.path.join('config_examples', config_filename))
+    print(f'Config file for {seq_filename} is saved as {config_filename} in config_examples/.')

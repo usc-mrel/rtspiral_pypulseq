@@ -1,6 +1,7 @@
 from pypulseq import make_block_pulse, make_trapezoid 
 from pypulseq.calc_duration import calc_duration
 import numpy as np
+import pdb
 
 
 def kernel_tag_SPAMM_REALTAG(seq, prep_param, params, system):
@@ -13,7 +14,7 @@ def kernel_tag_SPAMM_REALTAG(seq, prep_param, params, system):
     gradx = make_trapezoid(channel="x", area=clip_area,system=system)
 
     # hack to test if the gradx is too short.
-    if calc_duration(gradx) <= 0.0002:
+    if calc_duration(gradx) <= 0.00028:
         gradx = make_trapezoid(channel="x", area=clip_area, duration=0.00028,system=system)
 
     RF_1_y = make_block_pulse(np.deg2rad(22.5), delay=0, duration=duration, time_bw_product=2, phase_offset=np.deg2rad(90),system=system)
@@ -22,7 +23,7 @@ def kernel_tag_SPAMM_REALTAG(seq, prep_param, params, system):
     grady = make_trapezoid(channel="y", area=clip_area,system=system)
 
     # hack to test if the grady is too short.
-    if calc_duration(grady) <= 0.0002:
+    if calc_duration(grady) <= 0.00028:
         grady = make_trapezoid(channel="y", area=clip_area, duration=0.00028,system=system)
 
     # spoiler, so large area.
