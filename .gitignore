@@ -7,3 +7,4 @@ config.toml
 out_seq/
 out_trajectory
 gropt/gropt.c
+config_examples/
