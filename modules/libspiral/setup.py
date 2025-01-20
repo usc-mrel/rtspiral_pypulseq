@@ -1,4 +1,3 @@
 from setuptools import setup
 
-setup(package_dir={"": "src"},
-      cffi_modules=["src/spiralgen_build.py:ffibuilder"])
+setup(cffi_modules=["spiralgen_build.py:ffibuilder"])

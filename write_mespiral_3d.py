@@ -9,8 +9,8 @@ from pypulseq import (
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
 from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
-from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
-from libvds_rewind.pts_to_waveform import pts_to_waveform
+from libspiralutils import design_rewinder_exact_time, pts_to_waveform
+
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 from sigpy.mri.rf import slr 

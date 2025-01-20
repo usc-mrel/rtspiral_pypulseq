@@ -3,7 +3,7 @@ from pypulseq.make_delay import make_delay
 from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.calc_duration import calc_duration
 from pypulseq.add_gradients import add_gradients
-from libvds_rewind.rounding import round_up_to_GRT
+from libspiralutils import round_up_to_GRT
 import numpy as np
 import copy
 

@@ -8,7 +8,7 @@ from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
 from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
-from libvds_rewind.pts_to_waveform import pts_to_waveform
+from libspiralutils import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 import copy
