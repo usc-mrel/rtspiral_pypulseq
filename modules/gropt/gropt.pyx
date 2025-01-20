@@ -7,7 +7,7 @@ global N_ddebug
 N_ddebug = 100
 
 
-cdef extern from "../src/optimize_kernel.c":
+cdef extern from "../c/optimize_kernel.c":
     void _run_kernel_diff_fixeddt "run_kernel_diff_fixeddt"(double **G_out, int *N_out, double **ddebug, int verbose, 
                                                         double dt0, double gmax, double smax, double TE, 
                                                         int N_moments, double *moments_params, double PNS_thresh, 

@@ -14,10 +14,6 @@ Install the dependencies:
 
 ```pip install -r requirements.txt```
 
-Build `gropt` and `libvds` libraries for your system:
-
-```python setup.py develop```
-
 Last command should compile and put the libraries to the necessary places.
 
 ### Dependencies

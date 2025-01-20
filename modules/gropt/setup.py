@@ -19,17 +19,20 @@ from Cython.Build import cythonize
 import numpy
 
 
-sourcefiles = ['gropt.pyx', './src/cvx_matrix.c', './src/te_finder.c', './src/op_gradient.c', './src/op_maxwell.c', './src/op_bval.c', './src/op_beta.c', './src/op_eddy.c', './src/op_slewrate.c', './src/op_moments.c', './src/op_pns.c']
+sourcefiles = ['gropt.pyx', './c/cvx_matrix.c', './c/te_finder.c', 
+               './c/op_gradient.c', './c/op_maxwell.c', './c/op_bval.c', 
+               './c/op_beta.c', './c/op_eddy.c', './c/op_slewrate.c', 
+               './c/op_moments.c', './c/op_pns.c']
 
-include_dirs = [".",  "./src", numpy.get_include()]
-library_dirs = [".", "./src"]
+include_dirs = [".",  "./c", numpy.get_include()]
+library_dirs = [".", "./c"]
 if is_platform_windows:
     extra_compile_args = []
 else:
     extra_compile_args = ['-std=c11']
 
 
-extensions = [Extension("gropt",
+extensions = [Extension("cgropt",
                 sourcefiles,
                 language = "c",
                 include_dirs = include_dirs,

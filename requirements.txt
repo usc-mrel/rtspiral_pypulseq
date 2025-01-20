@@ -3,8 +3,11 @@ cython
 cffi
 matplotlib
 numpy
-PySide2
-sigpy==0.1.26
+PySide6
+sigpy==0.1.27
 pypulseq
 tomli >= 1.1.0 ; python_version < "3.11"
 seaborn
+# local packages
+./modules/gropt
+./modules/libspiral

@@ -1,0 +1,9 @@
+[build-system]
+# Minimum requirements for the build system to execute.
+requires = ["setuptools", "wheel", "cython", "numpy"]  # PEP 508 specifications.
+build-backend = "setuptools.build_meta"
+
+[project]
+# This is the project name. Required.
+name = "gropt"
+version = "1.0.1"
