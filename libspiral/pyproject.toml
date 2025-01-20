@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=42", "wheel", "cffi"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "libspiral"
+version = "0.1.0"
+description = "A module for spiral trajectory generation."
+authors = [
+    { name="Bilal Tasdelen", email="tasdelen@usc.edu" },
+]
+dependencies = [
+    "numpy",
+    "cffi",
+    "matplotlib",
+    # Add other dependencies here
+]
