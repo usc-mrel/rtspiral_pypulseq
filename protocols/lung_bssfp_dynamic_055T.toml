@@ -25,7 +25,7 @@ rewinder_time   = 0.8e-3 # [s] Exact rew time for 'grad_rew_method' = 'exact_tim
 [acquisition]
 
 resolution      = 3       # [mm]
-fov             = [40]  # [cm]
+fov             = [50]  # [cm]
 slice_thickness = 15       # [mm]
 
 flip_angle      = 30    # [deg]

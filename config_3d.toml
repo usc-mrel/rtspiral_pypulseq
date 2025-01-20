@@ -12,9 +12,9 @@ adc_dead_time     =  10e-6 # [s]
 excitation      = 'sinc'  # Options: 'sinc' only for now, update: SLR
 tbwp            = 6
 
-resolution      = 1       # [mm]
+resolution      = 4       # [mm]
 fov             = [24.0]  # [cm]
-slice_thickness = 110     # [mm] may correspond to "slab thickness" in 3D context.
+slice_thickness = 110     # [mm] may correspond to "slab thickness" in 3D context. Excited, not encoded.
 
 flip_angle      = 10     # degrees 
 rf_duration     = 0.8e-3   # [s]
@@ -41,7 +41,7 @@ inplane_os   = 1.5 # In-plane oversampling factor. Number of interleaves will be
 
 [acquisition.kz_encoding]
 FOV            = 128 # FOV of kz encoding
-repetitions    = 128 # number of kz encodes.
+repetitions    = 32 # number of kz encodes.
 ordering       = 'linear' # 'ping-pong', 'gaussian', 'linear'
 rotation_type  = 'stack' # 'arm' or 'stack'. 'arm' means rotate every arm. 'stack' means rotate after a stack is completed.
 
@@ -50,5 +50,5 @@ rotation_type  = 'stack' # 'arm' or 'stack'. 'arm' means rotate every arm. 'stac
 
 write_seq    = true
 filename_ext = 'min_min' # This will be attached to the filename
-show_plots   = false 
+show_plots   = true 
 detailed_rep = false

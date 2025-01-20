@@ -34,7 +34,7 @@ rf_duration     = 0.5e-3  # [s]
 TR              = 0     # [ms], 0 for min TR
 TE              = 0     # [ms], 0 for min TE
 
-repetitions     = 5
+repetitions     = 1200
 
 [acquisition.options]
 
@@ -46,4 +46,4 @@ T1 = 1 # [s]
 write_seq    = true
 filename_ext = '' # This will be attached to the filename
 show_plots   = false
-detailed_rep = true
+detailed_rep = false

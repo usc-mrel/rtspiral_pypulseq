@@ -70,6 +70,7 @@ idx = generate_encoding_indices(n_int, n_kz, n_eco=n_eco, n_rep=params['acquisit
 T_rew = 1.2e-3
 M = np.cumsum(g_grad, axis=0) * GRT
 
+# TODO: add rewinders to metadata.
 grad_rew_method = 1
 # Design rew with gropt
 if grad_rew_method == 1:
@@ -434,10 +435,9 @@ if params['user_settings']['write_seq']:
     import os
     from utils.traj_utils import save_3Dtraj
 
-    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
-    seq.set_definition(key="SliceThickness", value=params['acquisition']['slice_thickness']*1e-3)
+    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, res*1e-3])
+    seq.set_definition(key="SliceThickness", value=res*n_kz*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
-    seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
     seq.set_definition(key="TE", value=TE)
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
