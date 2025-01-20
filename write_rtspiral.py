@@ -7,7 +7,7 @@ from pypulseq import (make_adc, make_sinc_pulse, make_arbitrary_grad, make_digit
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
-from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad
+from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -67,7 +67,7 @@ grad_rew_method = params['spiral']['grad_rew_method']
 T_rew = params['spiral']['rewinder_time']
 # Design rew with gropt
 if grad_rew_method == 'gropt':
-    from gropt.helper_utils import get_min_TE_gfix
+    from gropt import get_min_TE_gfix
 
     # Method 1: GrOpt, separate optimization
     gropt_params = {}

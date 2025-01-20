@@ -2,8 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from math import ceil
-import gropt
-from .gropt import gropt
+import cgropt
 
 def get2_eddy_mode0(G, lam, dt):
     E0 = np.zeros_like(G)
@@ -90,7 +89,7 @@ def get_min_TE_diff(params, target_bval, min_TE, max_TE, verbose = 0):
         params['TE'] = T_lo + (T_range)/2.0
         if verbose:
             print(' %.2f' % params['TE'], end='', flush=True)
-        G, ddebug = gropt.gropt(params)
+        G, ddebug = cgropt.gropt(params)
         lim_break = ddebug[14]
         bval = get_bval(G, params)
         if bval > target_bval:
@@ -128,7 +127,7 @@ def get_min_TE_free(params, min_TE, max_TE, verbose = 0):
         params['TE'] = T_lo + (T_range)/2.0
         if verbose:
             print(' %.3f' % params['TE'], end='', flush=True)
-        G, ddebug = gropt.gropt(params)
+        G, ddebug = cgropt.gropt(params)
         lim_break = ddebug[14]
         if lim_break == 0:
             T_hi = params['TE']
@@ -187,7 +186,7 @@ def get_min_TE_gfix(params, max_TE, verbose = 0):
         gfix_TE = np.hstack([gfix_p0, np.ones(NN-N_fix)*-99999, gfix_p2])
         params['gfix'] = gfix_TE.copy()
         
-        G, ddebug = gropt(params)
+        G, ddebug = cgropt.gropt(params)
         lim_break = ddebug[14]
         
         if lim_break == 0:

@@ -38,7 +38,7 @@ extensions = [Extension("gropt.gropt",
 setup(
     name="rtspiral",
     version="0.1",
-    description="An example project using Python's CFFI",
+    description="Real-time spiral pulse sequence design",
     long_description=open("README.md", "rt").read(),
     url="https://github.com/btasdelen/rtspiral_pypulseq",
     author="Bilal Tasdelen",

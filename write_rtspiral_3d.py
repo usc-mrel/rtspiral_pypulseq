@@ -7,7 +7,7 @@ from pypulseq import (
 )
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
-from libvds.vds import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
+from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, vds_design
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time, design_joint_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations

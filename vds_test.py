@@ -1,6 +1,5 @@
-from libvds.vds import vds_design
 import matplotlib.pyplot as plt
-from libvds.vds import plotgradinfo
+from libspiral import vds_design, plotgradinfo
 from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 from libvds_rewind.pts_to_waveform import pts_to_waveform
 
