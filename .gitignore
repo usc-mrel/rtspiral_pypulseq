@@ -7,7 +7,7 @@ config.toml
 .vscode
 out_seq/
 out_trajectory
-gropt/gropt.c
+gropt.c
 *.so
 build/
 */build

@@ -1,14 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from pypulseq import Opts
-from pypulseq import (make_adc, make_sinc_pulse, make_arbitrary_grad, make_digital_output_pulse, make_delay, make_trapezoid, 
+from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make_delay, 
+                      make_arbitrary_grad, make_trapezoid, make_extended_trapezoid_area, 
                       calc_duration, calc_rf_center, 
                       rotate, add_gradients)
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
 from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
-from libspiralutils import pts_to_waveform
+from libspiralutils import pts_to_waveform, design_rewinder_exact_time
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 import copy
@@ -101,7 +102,6 @@ elif grad_rew_method == 'ext_trap_area':
     g_rewind_y = 1e3*pts_to_waveform(times_y, amplitudes_y, GRT)/system2.gamma
 
 elif grad_rew_method == 'exact_time':
-    from libvds_rewind.design_rewinder_exact_time import design_rewinder_exact_time
 
     [times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
     [times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
