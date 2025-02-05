@@ -25,7 +25,7 @@ import copy
 #plt.switch_backend('tkagg')
 
 # Load and prep system and sequence parameters
-params = load_params('config', './')
+params = load_params('config_cine', './')
 
 system = Opts(
     max_grad = params['system']['max_grad'], grad_unit="mT/m",
@@ -87,6 +87,8 @@ if grad_rew_method == 1:
     g_rewind_y = g_rewind_y.T[:,0]*1e3
 
 elif grad_rew_method == 2:
+    # PK HACK: force the slew to be smaller, but ONLY for the rewinder.
+    spiral_sys['max_slew'] = spiral_sys['max_slew']*0.7
     [times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
     [times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
 
@@ -226,8 +228,8 @@ seq = Sequence(system)
 params['flip_angle_last'] = params['acquisition']['flip_angle']
 
 # CINE parameters
-n_phases = 40 
-n_tr_per_phase = 6
+n_phases = 25 
+n_tr_per_phase = 8
 
 # tagging pulse pre-prep (only if fa_schedule exists)
 rf_amplitudes, FA_schedule_str = schedule_FA(params, n_phases*n_tr_per_phase)
@@ -271,7 +273,7 @@ for idx in range(np.ceil(len(gsp_xs)/n_tr_per_phase).astype(int)):
             idx_ = idx*n_tr_per_phase + tr_i
 
             # LABEL EXTENSIONS
-            seq.add_block(make_label('PHS', 'SET', idx))
+            # seq.add_block(make_label('PHS', 'SET', idx))
             seq.add_block(make_label('LIN', 'SET', idx_ % n_int))
 
             print("LIN set to: ", idx_ % n_int)
