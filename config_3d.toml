@@ -1,6 +1,6 @@
 [system]
 
-max_grad          =     24 # [mT/m]
+max_grad          =     18 # [mT/m]
 max_slew          =    120 # [T/m/s]
 grad_raster_time  =  10e-6 # [s]
 rf_raster_time    =   1e-6 # [s]
@@ -9,43 +9,42 @@ rf_dead_time      = 200e-6 # [s]
 adc_dead_time     =  10e-6 # [s]
 
 [acquisition]
-excitation      = 'slr'  # Options: 'sinc' only for now, update: SLR
+excitation      = 'sinc'  # Options: 'sinc' only for now, update: SLR
 tbwp            = 6
 
-resolution      = 3.5    # [mm]
-fov             = [24.0]  # [cm]
-slice_thickness = 100     # [mm] may correspond to "slab thickness" in 3D context.
+resolution      = 2.5    # [mm]
+fov             = [30.0]  # [cm]
+slice_thickness = 60     # [mm] may correspond to "slab thickness" in 3D context.
 
-flip_angle      = 70     # degrees 
-rf_duration     = 1.8e-3   # [s]
+flip_angle      = 65     # degrees 
+rf_duration     = 1.2e-3   # [s]
 
 TR              = 0      # [ms], 0 for min TR
 TE              = 0      # [ms], 0 for min TE
 
-repetitions     = 1      # n_TRs = repetitions * n_interleaves. repetitions is usually set to 1.
+repetitions     = 44     # n_TRs = repetitions * n_interleaves. repetitions is usually set to 1.
 
 [acquisition.spiral]
 contrast     = 'trueFISP' # can be: trueFISP, FISP, or FLASH.
 slew_ratio   = 0.8  # How much of the system slew rate to be used for spiral design. 
-ro_duration  = 3e-3 # [s] Readout duration
+ro_duration  = 3.43e-3 # [s] Readout duration
 adc_dwell    = 1e-6 # [s]
-arm_ordering = 'ga' # 'linear', 'ga','linear_custom'
-GA_steps     = 37 # Number of unique GA_steps, determines the duration of 1 repetition. Only enabled if 'ga' is selected.
+arm_ordering = 'linear' # 'linear', 'ga','linear_custom'
+GA_steps     = 144 # Number of unique GA_steps, determines the duration of 1 repetition. Only enabled if 'ga' is selected.
 # GA_angle     = 84.9382 # [deg]
-GA_angle     = 77.956 # [deg] TGA 4
+# GA_angle     = 77.956 # [deg] TGA 4
+GA_angle       = 111.25 # [deg] GA
 # custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
 # Note: custom_order assumes the number of interleaves, and does not work if it does not match.
 
 [acquisition.kz_encoding]
-FOV            = 128 # FOV of kz encoding
-repetitions    =  16 # number of kz encodes.
+FOV            = 110 # FOV of kz encoding
+repetitions    =  44 # number of kz encodes.
 ordering       = 'ping-pong' # 'ping-pong', 'gaussian'
 rotation_type  = 'stack' # 'arm' or 'stack'. 'arm' means rotate every arm. 'stack' means rotate after a stack is completed.
 
-
 [user_settings]
-
 write_seq    = true
-filename_ext = '' # This will be attached to the filename
-show_plots   = true 
+filename_ext = '_sinc_tbwp6_make_label' # This will be attached to the filename
+show_plots   = false 
 detailed_rep = true

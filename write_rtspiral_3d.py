@@ -11,6 +11,7 @@ from pypulseq.calc_rf_center import calc_rf_center
 from pypulseq.make_adc import make_adc
 from pypulseq.Sequence.sequence import Sequence
 from pypulseq.rotate import rotate
+from pypulseq.make_label import make_label
 from pypulseq.add_gradients import add_gradients
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
@@ -39,7 +40,7 @@ GRT = params['system']['grad_raster_time']
 
 spiral_sys = {
     'max_slew'          :  params['system']['max_slew']*params['acquisition']['spiral']['slew_ratio'],   # [T/m/s] 
-    'max_grad'          :  params['system']['max_grad'],   # [mT/m] 
+    'max_grad'          :  params['system']['max_grad']*0.95,   # [mT/m] 
     'adc_dwell'         :  params['acquisition']['spiral']['adc_dwell'],  # [s]
     'grad_raster_time'  :  GRT, # [s]
     'os'                :  8
@@ -338,6 +339,11 @@ for arm_i in range(0,n_TRs):
         .astype(int) % in_plane_rot \
         if loop_type == 'stack' \
         else arm_i % in_plane_rot
+    
+    # LABEL Extensions
+    if acquisition_type == '3D':
+        seq.add_block(make_label('PAR','SET', int(kz_idx[arm_i % len(kz_idx)]))) # should it be SLC?
+    seq.add_block(make_label('LIN', 'SET', int(arm_idx)))
 
     seq.add_block(gsp_xs[arm_idx], gsp_ys[arm_idx], adc)
 
