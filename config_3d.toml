@@ -20,7 +20,9 @@ flip_angle      = 65     # degrees
 rf_duration     = 1.2e-3   # [s]
 
 TR              = 0      # [ms], 0 for min TR
-TE              = 0      # [ms], 0 for min TE
+TE              = [1.15, 4]      # [ms], list of echo times, 0 for min TE and single echo
+
+n_dummy         = 30     # Number of dummy scans
 
 repetitions     = 44     # n_TRs = repetitions * n_interleaves. repetitions is usually set to 1.
 
@@ -36,6 +38,7 @@ GA_steps     = 144 # Number of unique GA_steps, determines the duration of 1 rep
 GA_angle       = 111.25 # [deg] GA
 # custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
 # Note: custom_order assumes the number of interleaves, and does not work if it does not match.
+inplane_os   = 1.5 # In-plane oversampling factor. Number of interleaves will be multiplied by this factor.
 
 [acquisition.kz_encoding]
 FOV            = 110 # FOV of kz encoding

@@ -1,0 +1,4 @@
+MRzeroCore
+ipympl
+jupyterlab
+cupy-cuda12x
