@@ -16,6 +16,10 @@ Install the dependencies:
 
 Last command should compile and put the libraries to the necessary places.
 
+*Note:* On some systems (Ubuntu), following package may need to be installed for Qt to work:
+
+`sudo apt install libxcb-cursor0`
+
 ### Dependencies
 See `requirements.txt`.
 
