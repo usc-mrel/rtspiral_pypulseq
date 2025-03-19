@@ -13,3 +13,4 @@ build/
 */build
 *.egg-info
 brainweb/
+config_examples/

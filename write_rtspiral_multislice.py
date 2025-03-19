@@ -9,14 +9,16 @@ from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
-from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
-from libspiralutils import pts_to_waveform, design_rewinder_exact_time
+from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, spiralgen_design, calcgradinfo
+from libspiralutils import pts_to_waveform, design_rewinder_exact_time, round_up_to_GRT
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 import copy
 import argparse
 import os
 import warnings
+from utility_test import krishna_rewinder
+
 
 # Cmd args
 parser = argparse.ArgumentParser(
@@ -56,20 +58,36 @@ fov   = params['acquisition']['fov'] # [cm]
 res   = params['acquisition']['resolution'] # [mm]
 Tread = params['spiral']['ro_duration'] # [s]
 
-
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
 
+"""
+# convert the max grad and slew
+spiral_sys['spiral_type']=0
+k, g2, grew, s, t = spiralgen_design(spiral_sys, n_int, fov[0]*1e-2, res*1e-3, Tread)
+g2 = np.concatenate((g2, grew), axis=0)
+plotgradinfo(g2, GRT)
+plt.savefig('grad2.pdf')
+"""
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
-# === design rewinder ===
+"""
+g_grad = rotate_z(g_grad, -np.pi/4)
+
+plotgradinfo(g_grad, GRT)
+plt.show()
+"""
+
 M = np.cumsum(g_grad, axis=0) * GRT
+t = (np.arange(1, g_grad.shape[0]+1))-0.5
+tt = (t*np.ones((2, 1))).T * GRT
+M1 = np.cumsum(g_grad * tt,  axis=0) * (GRT)
 
 grad_rew_method = params['spiral']['grad_rew_method']
 T_rew = params['spiral']['rewinder_time']
-# Design rew with gropt
+
 if grad_rew_method == 'gropt':
     from gropt import get_min_TE_gfix
 
@@ -81,12 +99,14 @@ if grad_rew_method == 'gropt':
     gropt_params['dt']   = GRT
 
     gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,0]*1e3, 1.0e-3]]
+
     gropt_params['gfix']  = np.array([g_grad[-1, 0]*1e-3, -99999, 0])
 
     g_rewind_x, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
     g_rewind_x = g_rewind_x.T[:,0]*1e3
 
     gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,1]*1e3, 1.0e-3]]
+
     gropt_params['gfix']  = np.array([g_grad[-1, 1]*1e-3, -99999, 0])
 
     g_rewind_y, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
@@ -112,6 +132,10 @@ elif grad_rew_method == 'exact_time':
     g_rewind_x = pts_to_waveform(times_x, amplitudes_x, GRT)
     g_rewind_y = pts_to_waveform(times_y, amplitudes_y, GRT)
 
+elif grad_rew_method == 'm1':
+    # follow Krishna's MRM 2005 method for M1-nulled trajectories
+    g_grad, g_rewind_x, g_rewind_y = krishna_rewinder(g_grad, GRT, system, params['spiral']['slew_ratio'])
+
 # add zeros to the end of g_rewind_x or g_rewind_y to make them the same length (in case they are not).
 if len(g_rewind_x) > len(g_rewind_y):
     g_rewind_y = np.concatenate((g_rewind_y, np.zeros(len(g_rewind_x) - len(g_rewind_y))))
@@ -122,6 +146,8 @@ else:
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
 
 if params['user_settings']['show_plots']:
+    _,_,_,m1,_,_,_ = calcgradinfo(g_grad, T=GRT)
+    print(f"m1x: {m1[-1,0]:.4f}, m1y: {m1[-1,1]:.4f}")
     plotgradinfo(g_grad, GRT)
     plt.show()
 
@@ -285,38 +311,50 @@ enable_trigger = True
 
 trig = make_digital_output_pulse(channel='ext1', duration=0.001, system=system)
 
-_, rf.shape_IDs = seq.register_rf_event(rf)
-for arm_i in range(0,n_TRs):
-    curr_rf = copy.deepcopy(rf)
+# loop the multi-slice sequence.
+hz_per_thickness = gz.amplitude * params['acquisition']['slice_shift'] * 1e-3
 
-    # check if we are using a rammped FA scheme (rf_amplitudes is a list []) 
-    if len(rf_amplitudes) > 0:
-        if arm_i >= len(rf_amplitudes):
-            n_TRs = arm_i
-            break
-        curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
-    
-    curr_rf.phase_offset = rf_phase
-    adc.phase_offset = rf_phase
+if 'num_slices' in params['acquisition']:
+    n_slices = params['acquisition']['num_slices']
+    slice_range = range(-n_slices // 2, n_slices // 2)
+else:
+    n_slices = 1
+    slice_range = [0]
 
-    rf_inc = np.mod(rf_inc + quadratic_phase_increment, np.pi * 2)
-    rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
+for slice_i in slice_range:
+    rf.freq_offset = hz_per_thickness * slice_i
+    _, rf.shape_IDs = seq.register_rf_event(rf)
+    for arm_i in range(0,n_TRs):
+        curr_rf = copy.deepcopy(rf)
 
-    if enable_trigger is True:
-        seq.add_block(trig, curr_rf, gzz)
-    else:
-        seq.add_block(curr_rf, gzz)
+        # check if we are using a rammped FA scheme (rf_amplitudes is a list []) 
+        if len(rf_amplitudes) > 0:
+            if arm_i >= len(rf_amplitudes):
+                n_TRs = arm_i
+                break
+            curr_rf.signal = rf.signal * rf_amplitudes[arm_i] / np.deg2rad(params['acquisition']['flip_angle'])
         
-    seq.add_block(TE_delay)
-    if params['spiral']['arm_ordering'] == 'ga':
-        seq.add_block(make_label('LIN', 'SET', arm_i % params['spiral']['GA_steps']))
-        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
-    else:
-        seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
-        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
-    if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        seq.add_block(gz_crush)
-    seq.add_block(TR_delay)
+        curr_rf.phase_offset = rf_phase
+        adc.phase_offset = rf_phase
+
+        rf_inc = np.mod(rf_inc + quadratic_phase_increment, np.pi * 2)
+        rf_phase = np.mod(rf_phase + linear_phase_increment + rf_inc, np.pi * 2)
+
+        if enable_trigger is True:
+            seq.add_block(trig, curr_rf, gzz)
+        else:
+            seq.add_block(curr_rf, gzz)
+            
+        seq.add_block(TE_delay)
+        if params['spiral']['arm_ordering'] == 'ga':
+            seq.add_block(make_label('LIN', 'SET', arm_i % params['spiral']['GA_steps']))
+            seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
+        else:
+            seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
+            seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
+        if params['spiral']['contrast'] in ('FLASH', 'FISP'):
+            seq.add_block(gz_crush)
+        seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
 end_prep_str = kernel_handle_end_preparations(seq, params, system, rf=rf, gz=gzz)
@@ -347,12 +385,11 @@ if params['user_settings']['show_plots']:
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
 
-    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}]) # Aera
-    #seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 595, 'bandwidth': 130}, {'frequency': 1030, 'bandwidth': 250}]) # FREE.max
+    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}])
     plt.title('Gradient spectrum')
     plt.show()
 
- 
+
 # Detailed report if requested
 if params['user_settings']['detailed_rep']:
     print("\n===== Detailed Test Report =====\n")
@@ -363,7 +400,12 @@ if params['user_settings']['detailed_rep']:
 if params['user_settings']['write_seq']:
 
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
-    seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
+    if 'num_slices' in params['acquisition']:
+        slab_thickness = (params['acquisition']['slice_shift']*1e-3*int(params['acquisition']['num_slices'])) + (params['acquisition']['slice_thickness'] - params['acquisition']['slice_shift'])*1e-3
+        print(f"Slab thickness: {slab_thickness}")
+        seq.set_definition(key="Slice_Thickness", value=slab_thickness)
+    else:
+        seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
     seq.set_definition(key="Name", value="sprssfp")
     seq.set_definition(key="TE", value=TE)
     seq.set_definition(key="TR", value=TR)
@@ -395,6 +437,11 @@ if params['user_settings']['write_seq']:
         'spatial_resolution': res,
         'arm_ordering': params['spiral']['arm_ordering'],
     }
+
+    # truncate 
+    n_slices = int(params['acquisition']['num_slices'])
+    k_traj_adc = k_traj_adc[:, 0:k_traj_adc.shape[1]//n_slices]
+
     save_metadata(seq.signature_value, k_traj_adc, params_save, params['user_settings']['show_plots'], dcf_method="hoge", out_dir="out_trajectory")
 
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')

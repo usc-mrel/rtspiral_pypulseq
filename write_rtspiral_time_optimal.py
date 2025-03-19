@@ -118,6 +118,8 @@ if len(g_rewind_x) > len(g_rewind_y):
 else:
     g_rewind_x = np.concatenate((g_rewind_x, np.zeros(len(g_rewind_y) - len(g_rewind_x))))
 
+len_g_grad = len(g_grad)
+
 # concatenate g and g_rewind, and plot.
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
 
@@ -136,11 +138,12 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 use='excitation', system=system)
 
 gzrr = copy.deepcopy(gzr)
-gzrr.delay = 0 #gz.delay
-rf.delay = calc_duration(gzrr) + gz.rise_time
-gz.delay = calc_duration(gzrr)
-gzr.delay = calc_duration(gzrr, gz)
-gzz = add_gradients([gzrr, gz, gzr], system=system)
+#gzrr.delay = 0 #gz.delay
+#rf.delay = calc_duration(gzrr) + gz.rise_time
+#gz.delay = calc_duration(gzrr)
+#gzr.delay = calc_duration(gzrr, gz)
+gzr.delay = calc_duration(gz)
+gzz = add_gradients([gz, gzr], system=system)
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
@@ -161,7 +164,7 @@ gsp_y.first = 0
 gsp_y.last = 0
 
 # Set the Slice rewinder balance gradients delay
-gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
+gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - (len(g_rewind_x)*GRT)
 
 # create a crusher gradient (only for FLASH)
 if params['spiral']['contrast'] == 'FLASH' or params['spiral']['contrast'] == 'FISP':
@@ -310,10 +313,10 @@ for arm_i in range(0,n_TRs):
     seq.add_block(TE_delay)
     if params['spiral']['arm_ordering'] == 'ga':
         seq.add_block(make_label('LIN', 'SET', arm_i % params['spiral']['GA_steps']))
-        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
+        seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc, gzrr) 
     else:
         seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
-        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
+        seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
         seq.add_block(gz_crush)
     seq.add_block(TR_delay)
@@ -347,8 +350,7 @@ if params['user_settings']['show_plots']:
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
 
-    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}]) # Aera
-    #seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 595, 'bandwidth': 130}, {'frequency': 1030, 'bandwidth': 250}]) # FREE.max
+    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}])
     plt.title('Gradient spectrum')
     plt.show()
 
