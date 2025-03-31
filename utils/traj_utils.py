@@ -1,7 +1,6 @@
 from typing import Literal
 from scipy.io import savemat
 from scipy.signal import medfilt
-from sigpy.mri.dcf import pipe_menon_dcf
 import numpy as np
 import numpy.typing as npt
 import os
@@ -72,6 +71,8 @@ def save_metadata(filename: str, k_traj_adc: npt.ArrayLike, params: dict, show_p
         w[-int(Nsample//2):] = w[-int(Nsample//2)] # need this to correct weird jump at the end and improve SNR
         w = w/np.max(w)
     elif dcf_method == "pipe_menon":
+        from sigpy.mri.dcf import pipe_menon_dcf
+
         Nsample2 = Nsample-ndiscard
 
         # calculate density compensation weights using Pipe and Menon's method

@@ -6,10 +6,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pypulseq as pp
 from scipy.io import loadmat
+from PySide6.QtWidgets import QApplication, QFileDialog
+import sys
 
+def get_filepath(dir: str=''):
+    '''QT based file selection UI.'''
+    app = QApplication(sys.argv)
+    options = QFileDialog.Options()
+    options |= QFileDialog.ReadOnly
+    file_path, _ = QFileDialog.getOpenFileName(None, "Select an Pulseq seq file", dir, "Seq files (*.seq);;All Files (*)", options=options)
+    app.shutdown()
+    return file_path
 
 # %%
-seq_path = os.path.join('out_seq/spiral_FLASH_linear16.3636_nTR110_Tread3.00_TR5.05ms_FA30.seq')
+# seq_path = os.path.join('out_seq/spiral_FLASH_linear16.3636_nTR110_Tread3.00_TR5.05ms_FA30.seq')
+seq_path = get_filepath('out_seq')
+
 seqp = pp.Sequence()
 seqp.read(seq_path)
 print('Sequence signature: ' + seqp.signature_value)
@@ -84,7 +96,7 @@ from sigpy import fourier
 
 nchannel = 1
 # Reconstruct
-gpu_device = 0
+gpu_device = -1
 device = sp.Device(gpu_device)
 
 coord_gpu = sp.to_device(ktraj, device=device)
@@ -93,7 +105,7 @@ w_gpu = sp.to_device(w, device=device)
 frames = []
 images = []
 for arm_counter, arm in enumerate(kspace_adc.T[:,:]):
-    adata = sp.to_device(arm[pre_discard:, None].T, device=device)
+    adata = sp.to_device(arm[pre_discard:, None].T, device=device).numpy()
     frames.append(fourier.nufft_adjoint(
             adata*w_gpu,
             coord_gpu[arm_counter%n_unique_angles,:,:],
