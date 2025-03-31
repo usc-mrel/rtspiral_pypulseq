@@ -17,7 +17,7 @@ import copy
 import argparse
 import os
 import warnings
-from utility_test import krishna_rewinder
+from utils.rewinders import krishna_rewinder
 
 
 # Cmd args
