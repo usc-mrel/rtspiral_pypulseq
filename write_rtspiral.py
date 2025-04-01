@@ -8,10 +8,10 @@ from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
-from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, calcgradinfo
+from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libspiralutils import pts_to_waveform, design_rewinder_exact_time
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
-from math import ceil, atan2
+from math import ceil
 import copy
 import argparse
 import os
@@ -382,7 +382,9 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']:.4f}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+
+    m1_str = "M1" if params['spiral']['M1_nulling'] else ""
+    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']:.4f}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{m1_str}_{params['user_settings']['filename_ext']}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
     seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")
