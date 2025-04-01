@@ -1,4 +1,7 @@
 MRzeroCore
 ipympl
+ipython
+matplotlib
 jupyterlab
 cupy-cuda12x
+PySide6
