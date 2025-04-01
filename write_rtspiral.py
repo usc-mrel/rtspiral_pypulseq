@@ -60,13 +60,19 @@ Tread = params['spiral']['ro_duration'] # [s]
 
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
-
+# TODO: Does it improve everytime, or is this just a coincidence?
+# rot_ang = atan2(k[-1,1], k[-1,0]) - np.pi/8
+# rot_mtx = np.array([[np.cos(rot_ang), -np.sin(rot_ang)], [np.sin(rot_ang), np.cos(rot_ang)]])
+# g = np.dot(g, rot_mtx) # rotate the trajectory to the right orientation
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # === design rewinder ===
-M = np.cumsum(g_grad, axis=0) * GRT
+M0 = np.cumsum(g_grad, axis=0) * GRT * 1e3 # [mT.s/m] -> [mT.ms/m]
+t = (np.arange(1, g_grad.shape[0]+1))*GRT*1e3 # [ms]
+tt = (t*np.ones((2, 1))).T
+M1 = np.cumsum(g_grad*tt, axis=0)*GRT*1e3 # [mT.ms^2/m]
 
 grad_rew_method = params['spiral']['grad_rew_method']
 T_rew = params['spiral']['rewinder_time']
@@ -81,13 +87,21 @@ if grad_rew_method == 'gropt':
     gropt_params['smax'] = params['system']['max_slew']*params['spiral']['slew_ratio']
     gropt_params['dt']   = GRT
 
-    gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,0]*1e3, 1.0e-3]]
+    gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M0[-1,0], 1.0e-5]]
+    
+    if params['spiral']['M1_nulling']:
+        gropt_params['moment_params'].append([0, 1, 0, -1, -1, -M1[-1,0]+M0[-1,0]*(t[-1]+GRT*1e3), 1.0e-5])
+
     gropt_params['gfix']  = np.array([g_grad[-1, 0]*1e-3, -99999, 0])
 
     g_rewind_x, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
     g_rewind_x = g_rewind_x.T[:,0]*1e3
 
-    gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,1]*1e3, 1.0e-3]]
+    gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M0[-1,1], 1.0e-5]]
+
+    if params['spiral']['M1_nulling']:
+        gropt_params['moment_params'].append([0, 1, 0, -1, -1, -M1[-1,1]+M0[-1,1]*(t[-1]+GRT*1e3), 1.0e-5])
+
     gropt_params['gfix']  = np.array([g_grad[-1, 1]*1e-3, -99999, 0])
 
     g_rewind_y, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
@@ -96,19 +110,26 @@ if grad_rew_method == 'gropt':
 elif grad_rew_method == 'ext_trap_area':
     from pypulseq.make_extended_trapezoid_area import make_extended_trapezoid_area
 
+    if params['spiral']['M1_nulling']:
+        warnings.warn("M1 nulling is not supported with 'ext_trap_area' method. It will be ignored.")
+        params['spiral']['M1_nulling'] = False
     # Copy the system to modify slew rate to obey reduced SR of the spirals.
     system2 = copy.deepcopy(system)
     system2.max_slew = system.max_slew*params['spiral']['slew_ratio']
-    _,times_x,amplitudes_x = make_extended_trapezoid_area(channel='x', area=-M[-1,0]*system2.gamma*1e-3, grad_start=g_grad[-1, 0]*system2.gamma*1e-3, grad_end=0, system=system2)
-    _,times_y,amplitudes_y = make_extended_trapezoid_area(channel='y', area=-M[-1,1]*system2.gamma*1e-3, grad_start=g_grad[-1, 1]*system2.gamma*1e-3, grad_end=0, system=system2)
+    _,times_x,amplitudes_x = make_extended_trapezoid_area(channel='x', area=-M0[-1,0]*system2.gamma*1e-3, grad_start=g_grad[-1, 0]*system2.gamma*1e-3, grad_end=0, system=system2)
+    _,times_y,amplitudes_y = make_extended_trapezoid_area(channel='y', area=-M0[-1,1]*system2.gamma*1e-3, grad_start=g_grad[-1, 1]*system2.gamma*1e-3, grad_end=0, system=system2)
 
     g_rewind_x = 1e3*pts_to_waveform(times_x, amplitudes_x, GRT)/system2.gamma
     g_rewind_y = 1e3*pts_to_waveform(times_y, amplitudes_y, GRT)/system2.gamma
 
 elif grad_rew_method == 'exact_time':
+    
+    if params['spiral']['M1_nulling']:
+        warnings.warn("M1 nulling is not supported with 'exact_time' method. It will be ignored.")
+        params['spiral']['M1_nulling'] = False
 
-    [times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
-    [times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
+    [times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M0[-1,0], spiral_sys)
+    [times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M0[-1,1], spiral_sys)
 
     g_rewind_x = pts_to_waveform(times_x, amplitudes_x, GRT)
     g_rewind_y = pts_to_waveform(times_y, amplitudes_y, GRT)
@@ -378,7 +399,9 @@ if params['user_settings']['write_seq']:
     seq.set_definition(key="TR", value=TR)
     seq.set_definition(key="FA", value=params['acquisition']['flip_angle'])
     seq.set_definition(key="Resolution_mm", value=res)
-    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']:.4f}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{params['user_settings']['filename_ext']}"
+
+    m1_str = "M1" if params['spiral']['M1_nulling'] else ""
+    seq_filename = f"spiral_{params['spiral']['contrast']}{FA_schedule_str}{prep_str}{end_prep_str}_{params['spiral']['arm_ordering']}{params['spiral']['GA_angle']:.4f}_nTR{n_TRs}_Tread{params['spiral']['ro_duration']*1e3:.2f}_TR{TR*1e3:.2f}ms_FA{params['acquisition']['flip_angle']}_{m1_str}_{params['user_settings']['filename_ext']}"
 
     # remove double, triple, quadruple underscores, and trailing underscores
     seq_filename = seq_filename.replace("__", "_").replace("__", "_").replace("__", "_").strip("_")
