@@ -1,0 +1,93 @@
+[system]
+
+max_grad          =     33 # [mT/m]
+max_slew          =    160 # [T/m/s]
+grad_raster_time  =  10e-6 # [s]
+rf_raster_time    =   1e-6 # [s]
+rf_ringdown_time  =  10e-6 # [s]
+rf_dead_time      = 200e-6 # [s]
+adc_dead_time     =  10e-6 # [s]
+
+[spiral]
+
+contrast     = 'trueFISP' # FLASH, FISP
+slew_ratio   = 0.7  # How much of the system slew rate to be used for spiral design.  
+ro_duration = 3.0e-3 # [s] Readout duration
+adc_dwell   = 1e-6 # [s]
+arm_ordering = 'linear' # 'linear', 'ga', 'tinyga', 'linear_custom'
+GA_steps    = 0  # 0 to disable GA
+GA_angle    = 111.25  # [deg]
+# custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
+# Note: custom_order assumes the number of interleaves, and does not work if it does not match.
+grad_rew_method = "ext_trap_area"
+rewinder_time   = 0.8e-3
+
+[acquisition]
+resolution      = 1.19       # [mm]
+fov             = [40]  # [cm]
+slice_thickness = 8       # [mm]
+
+flip_angle      = 20 
+rf_duration     = 0.5e-3  # [s]
+tbwp            = 2
+
+TR              = 0     # [ms], 0 for min TR
+TE              = 0     # [ms], 0 for min TE
+repetitions     = 2 
+
+[acquisition.cine]
+cardiac_phases = 25 #20 
+n_tr_per_phase = 8
+
+[acquisition.fa_schedule]
+type = "ramp_ibrahim"
+enabled = false 
+T1                = 701 # [ms]
+T2                = 58  # [ms] 
+
+[[preparations]]
+type            = "tagging"
+enabled         = true 
+#tag_type      = "grid_REALTAG"
+tag_type        = "grid_CSPAMM"
+grid_tag_spacing = 2.0 #0.7   # [cm]
+include_in_filename = true
+# tag_type        = "radial"
+# num_tags = 10  # Number of taglines per half circle
+# tagging_time = 10  # in ms
+
+[[preparations]]
+type            = "rf"
+enabled         = true 
+phase           = 180    # degrees
+rf_scale        = 0.5    # scale alpha by 0.5
+TR_scale        = 0.5    # set delay to TR/2
+
+ 
+[[end_preparations]]
+type            = "rf"
+enabled         = true 
+phase           = 0      # degrees
+rf_scale        = -1    # -1 implies use the last RF amplitude.
+TR_scale        = 0.5    # set delay to TR/2
+
+
+[[end_preparations]]
+type            = "rf"
+enabled         = true 
+phase           = 180    # degrees
+rf_scale        = -0.5    # scale alpha by 0.5
+TR_scale        = 0      # set delay
+
+[[end_preparations]]
+type            = "crusher"
+enabled         = true 
+channel         = "z"
+cycles_per_thickness = 4
+
+[user_settings]
+
+write_seq    = true
+filename_ext = '2025_03_10_crush' # This will be attached to the filename
+show_plots   = false 
+detailed_rep = true
