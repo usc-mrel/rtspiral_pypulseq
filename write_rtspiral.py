@@ -9,6 +9,7 @@ from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
+from utils.rewinders import spiral_rewinder_m1_nayak
 from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
 from libspiralutils import pts_to_waveform, design_rewinder_exact_time
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
@@ -76,7 +77,7 @@ if grad_rew_method == 'gropt':
     # Method 1: GrOpt, separate optimization
     gropt_params = {}
     gropt_params['mode'] = 'free'
-    gropt_params['gmax'] = params['system']['max_grad']*0.77*1e-3 # [mT/m] -> [T/m]
+    gropt_params['gmax'] = params['system']['max_grad']*1e-3 # [mT/m] -> [T/m]
     gropt_params['smax'] = params['system']['max_slew']*params['spiral']['slew_ratio']
     gropt_params['dt']   = GRT
 
@@ -111,6 +112,10 @@ elif grad_rew_method == 'exact_time':
 
     g_rewind_x = pts_to_waveform(times_x, amplitudes_x, GRT)
     g_rewind_y = pts_to_waveform(times_y, amplitudes_y, GRT)
+
+elif grad_rew_method == 'm1_nayak':
+    # Krishna rewinder
+    g_grad, g_rewind_x, g_rewind_y = spiral_rewinder_m1_nayak(g_grad, GRT, system, params['spiral']['slew_ratio'])
 
 # add zeros to the end of g_rewind_x or g_rewind_y to make them the same length (in case they are not).
 if len(g_rewind_x) > len(g_rewind_y):
@@ -347,10 +352,14 @@ if params['user_settings']['show_plots']:
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
 
-    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}]) # Aera
-    #seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 595, 'bandwidth': 130}, {'frequency': 1030, 'bandwidth': 250}]) # FREE.max
-    plt.title('Gradient spectrum')
-    plt.show()
+
+    if 'acoustic_resonances' in params and 'frequencies' in params['acoustic_resonances']:
+        resonances = []
+        for idx in range(len(params['acoustic_resonances']['frequencies'])):
+            resonances.append({'frequency': params['acoustic_resonances']['frequencies'][idx], 'bandwidth': params['acoustic_resonances']['bandwidths'][idx]})
+        seq.calculate_gradient_spectrum(acoustic_resonances=resonances)
+        plt.title('Gradient spectrum')
+        plt.show()
 
  
 # Detailed report if requested

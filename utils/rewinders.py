@@ -26,7 +26,7 @@ def rotate_z(grad, angle):
     return grad @ rot_mat
 
 
-def krishna_rewinder(g_grad, GRT, system, slew_ratio=1):
+def spiral_rewinder_m1_nayak(g_grad, GRT, system, slew_ratio=1):
     # following Spiral Balanced Steady-State Free Precession Cardiac Imaging by Nayak et al. 2005
     from scipy.optimize import fsolve
 

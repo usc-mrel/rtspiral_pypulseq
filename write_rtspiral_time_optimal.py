@@ -76,7 +76,7 @@ if grad_rew_method == 'gropt':
     # Method 1: GrOpt, separate optimization
     gropt_params = {}
     gropt_params['mode'] = 'free'
-    gropt_params['gmax'] = params['system']['max_grad']*0.77*1e-3 # [mT/m] -> [T/m]
+    gropt_params['gmax'] = params['system']['max_grad']*1e-3 # [mT/m] -> [T/m]
     gropt_params['smax'] = params['system']['max_slew']*params['spiral']['slew_ratio']
     gropt_params['dt']   = GRT
 
@@ -350,9 +350,13 @@ if params['user_settings']['show_plots']:
     plt.ylabel('$k_y [mm^{-1}]$')
     plt.title('k-Space Trajectory')
 
-    seq.calculate_gradient_spectrum(acoustic_resonances=[{'frequency': 700, 'bandwidth': 100}, {'frequency': 1164, 'bandwidth': 250}])
-    plt.title('Gradient spectrum')
-    plt.show()
+    if 'acoustic_resonances' in params and 'frequencies' in params['acoustic_resonances']:
+        resonances = []
+        for idx in range(len(params['acoustic_resonances']['frequencies'])):
+            resonances.append({'frequency': params['acoustic_resonances']['frequencies'][idx], 'bandwidth': params['acoustic_resonances']['bandwidths'][idx]})
+        seq.calculate_gradient_spectrum(acoustic_resonances=resonances)
+        plt.title('Gradient spectrum')
+        plt.show()
 
  
 # Detailed report if requested
