@@ -1,22 +1,8 @@
 #%%
 import numpy as np
-import matplotlib.pyplot as plt
-from pypulseq import Opts
-from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make_delay, 
-                      make_arbitrary_grad, make_trapezoid, make_extended_trapezoid_area, 
-                      calc_duration, calc_rf_center, 
-                      rotate, add_gradients, make_label)
-from pypulseq.Sequence.sequence import Sequence
-from utils import schedule_FA, load_params
-from utils.traj_utils import save_metadata
-from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, spiralgen_design
-from libspiralutils import pts_to_waveform, design_rewinder_exact_time, round_up_to_GRT
-from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
+from libspiral import  plotgradinfo
+from libspiralutils import pts_to_waveform, round_up_to_GRT
 from math import ceil
-import copy
-import argparse
-import os
-import warnings
 
 def rotate_z(grad, angle):
     # grad is a 2D array with shape (n, 2)
@@ -26,7 +12,7 @@ def rotate_z(grad, angle):
     return grad @ rot_mat
 
 
-def spiral_rewinder_m1_nayak(g_grad, GRT, system, slew_ratio=1):
+def spiral_rewinder_m1_nayak(g_grad, GRT, system):
     # following Spiral Balanced Steady-State Free Precession Cardiac Imaging by Nayak et al. 2005
     from scipy.optimize import fsolve
 
@@ -59,7 +45,7 @@ def spiral_rewinder_m1_nayak(g_grad, GRT, system, slew_ratio=1):
         return np.cumsum(g_grad * t_,  axis=0) * (GRT**2)
     mamp_dir = lambda g_int, time, direction: g_int - (direction * S * time)
 
-    S = 1e3 * (system.max_slew / system.gamma) * slew_ratio # T/m/s -> mT ms /m
+    S = 1e3 * (system.max_slew / system.gamma) # T/m/s -> mT ms /m
     tx1 = np.abs(g_grad[-1,0] / S)
     Mx0 = M[-1, 0] # mT ms / m
     Mx1 = M1[-1, 0] # mT ms^2 / m
