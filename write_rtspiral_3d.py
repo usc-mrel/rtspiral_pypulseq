@@ -8,7 +8,7 @@ from pypulseq import (
 from utils.schedule_FA import schedule_FA
 from utils.load_params import load_params
 from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad
-from libspiralutils import design_rewinder_exact_time, pts_to_waveform
+from librewinder.design_rewinder import design_rewinder
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
 from sigpy.mri.rf import slr 
@@ -49,47 +49,10 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
-# === design rewinder ===
-T_rew = 1.2e-3
-M = np.cumsum(g_grad, axis=0) * GRT
-
-grad_rew_method = 1
-# Design rew with gropt
-if grad_rew_method == 1:
-    from gropt.helper_utils import *
-
-    # Method 1: GrOpt, separate optimization
-    gropt_params = {}
-    gropt_params['mode'] = 'free'
-    gropt_params['gmax'] = params['system']['max_grad']*1e-3 # [mT/m] -> [T/m]
-    gropt_params['smax'] = params['system']['max_slew']*params['acquisition']['spiral']['slew_ratio']
-    gropt_params['dt']   = GRT
-
-    gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,0]*1e3, 1.0e-3]]
-    gropt_params['gfix']  = np.array([g_grad[-1, 0]*1e-3, -99999, 0])
-
-    g_rewind_x, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
-    g_rewind_x = g_rewind_x.T[:,0]*1e3
-
-    gropt_params['moment_params']  = [[0, 0, 0, -1, -1, -M[-1,1]*1e3, 1.0e-3]]
-    gropt_params['gfix']  = np.array([g_grad[-1, 1]*1e-3, -99999, 0])
-
-    g_rewind_y, T = get_min_TE_gfix(gropt_params, T_rew*1e3, True)
-    g_rewind_y = g_rewind_y.T[:,0]*1e3
-
-elif grad_rew_method == 2:
-    [times_x, amplitudes_x] = design_rewinder_exact_time(g_grad[-1, 0], 0, T_rew, -M[-1,0], spiral_sys)
-    [times_y, amplitudes_y] = design_rewinder_exact_time(g_grad[-1, 1], 0, T_rew, -M[-1,1], spiral_sys)
-
-    g_rewind_x = pts_to_waveform(times_x, amplitudes_x, GRT)
-    g_rewind_y = pts_to_waveform(times_y, amplitudes_y, GRT)
-
-# add zeros to the end of g_rewind_x or g_rewind_y to make them the same length (in case they are not).
-if len(g_rewind_x) > len(g_rewind_y):
-    g_rewind_y = np.concatenate((g_rewind_y, np.zeros(len(g_rewind_x) - len(g_rewind_y))))
-else:
-    g_rewind_x = np.concatenate((g_rewind_x, np.zeros(len(g_rewind_y) - len(g_rewind_x))))
-
+g_rewind_x, g_rewind_y = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, \
+                                         slew_ratio=params['spiral']['slew_ratio'], \
+                                         grad_rew_method=params['spiral']['grad_rew_method'], \
+                                         M1_nulling=params['spiral']['M1_nulling'])
 
 # concatenate g and g_rewind, and plot.
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
