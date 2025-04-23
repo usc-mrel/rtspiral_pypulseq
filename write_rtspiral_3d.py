@@ -49,7 +49,7 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
-g_rewind_x, g_rewind_y = design_rewinder(g_grad, GRT, params['spiral']['rewinder_time'], system, \
+g_rewind_x, g_rewind_y = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, \
                                          slew_ratio=params['spiral']['slew_ratio'], \
                                          grad_rew_method=params['spiral']['grad_rew_method'], \
                                          M1_nulling=params['spiral']['M1_nulling'])

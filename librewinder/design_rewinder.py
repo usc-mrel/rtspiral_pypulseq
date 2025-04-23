@@ -1,11 +1,11 @@
 import numpy as np
 from libspiralutils import pts_to_waveform, design_rewinder_exact_time
 import copy
-from librewinder.rewinder_m1_nayak import spiral_rewinder_m1_nayak
+from .rewinder_m1_nayak import spiral_rewinder_m1_nayak
 import warnings
 
 
-def design_rewinder(g_grad, GRT, T_rew, system, slew_ratio=0.7, grad_rew_method='gropt', M1_nulling=False):
+def design_rewinder(g_grad, T_rew, system, slew_ratio=0.7, grad_rew_method='gropt', M1_nulling=False):
 
     """Design_rewinder for spiral trajectories.
 
@@ -21,7 +21,7 @@ def design_rewinder(g_grad, GRT, T_rew, system, slew_ratio=0.7, grad_rew_method=
     Returns:
         g_rewind_x g_rewind_y 
     """
-
+    GRT = system.grad_raster_time
 
     # === design rewinder ===
     M0 = np.cumsum(g_grad, axis=0) * GRT * 1e3 # [mT.s/m] -> [mT.ms/m]
