@@ -7,6 +7,21 @@ import warnings
 
 def design_rewinder(g_grad, GRT, T_rew, system, slew_ratio=0.7, grad_rew_method='gropt', M1_nulling=False):
 
+    """Design_rewinder for spiral trajectories.
+
+    Inputs:
+        g_grad: array [readout x 2] in units mT/m 
+        GRT: gradient raster time (s)
+        T_rew: time for rewind (s)
+        system: pulseq system object (containing max grad, slew, and other hardware limits)
+        slew_ratio: slew ratio to limit spiral rewinder
+        grad_rew_method: 'gropt', 'ext_trap_area', 'exact_time', 'm1_nayak'
+        M1_nulling: true or false (only available with 'gropt')
+    
+    Returns:
+        g_rewind_x g_rewind_y 
+    """
+
 
     # === design rewinder ===
     M0 = np.cumsum(g_grad, axis=0) * GRT * 1e3 # [mT.s/m] -> [mT.ms/m]
