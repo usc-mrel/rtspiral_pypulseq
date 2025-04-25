@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Tasdelen"
+  given-names: "Bilal"
+  orcid: "https://orcid.org/0000-0001-6462-3651"
+- family-names: "Kumar"
+  given-names: "Prakash"
+  orcid: "https://orcid.org/0000-0002-0685-5160"
+title: "2D/3D Spiral Sequences with PyPulseq"
+version: 0.9
+doi: 10.5281/zenodo.15284023
+date-released: 2023-11-26
+url: "https://github.com/usc-mrel/rtspiral_pypulseq"
