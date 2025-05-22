@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "libspiral"
-version = "0.2.0"
+version = "0.3.0"
 description = "A module for spiral trajectory generation."
 authors = [
     { name="Bilal Tasdelen", email="tasdelen@usc.edu" },
