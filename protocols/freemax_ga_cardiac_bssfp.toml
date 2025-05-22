@@ -18,6 +18,7 @@ arm_ordering = 'ga' #_custom' # 'linear', 'ga', 'tinyga', 'linear_custom'
 GA_steps    = 144  # 0 to disable GA
 GA_angle    = 222.4969    # [deg]
 grad_rew_method = "ext_trap_area"
+M1_nulling = false
 rewinder_time = 0.65e-3
 custom_order = [0, 16, 8, 4, 20, 12, 2, 18, 10, 6, 14, 1, 17, 9, 5, 13, 3, 19, 11, 7, 15]
 #custom_order = [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15 ] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'

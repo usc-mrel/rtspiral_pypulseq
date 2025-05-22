@@ -61,11 +61,6 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 
-
-# Generate encoding indices
-
-idx = generate_encoding_indices(n_int, n_kz, n_eco=n_eco, n_rep=params['acquisition']['repetitions'], kz_ordering='linear', kspace_ordering='arm')
-
 # === design rewinder ===
 T_rew = 1.2e-3
 M = np.cumsum(g_grad, axis=0) * GRT
@@ -209,10 +204,15 @@ elif params['acquisition']['spiral']['arm_ordering'] == 'ga':
         ang += params['acquisition']['spiral']['GA_angle']*np.pi/180
         ang = ang % (2*np.pi)
         # print(f"Deg: {ang*180/np.pi}")
-    n_TRs = n_int * params['acquisition']['repetitions']
+    n_TRs = n_int * params['acquisition']['repetitions'] * n_kz
 
 else:
     raise Exception("Unknown arm ordering") 
+
+# Generate encoding indices
+kz_ordering = params['acquisition']['kz_encoding']['kz_ordering']
+kspace_ordering = params['acquisition']['kz_encoding']['kspace_ordering']
+idx = generate_encoding_indices(n_int, n_kz, n_eco=n_eco, n_rep=params['acquisition']['repetitions'], kz_ordering=kz_ordering, kspace_ordering=kspace_ordering)
 
 # TODO: Combine slice rewinder and partition encoding to reduce min TE.
 # set the kz encoding if it is a 3D acquisition.
@@ -235,21 +235,24 @@ max_phase_rewind_area_idx = np.argmax(np.abs(phase_rewind_areas))
 dummy_trap = make_trapezoid(channel="z", area=phase_areas[max_phase_area_idx], system=system)
 dummy_trap_rewind = make_trapezoid(channel="z", area=phase_rewind_areas[max_phase_rewind_area_idx], system=system)
 
-kz_encoding_str = params['acquisition']['kz_encoding']['ordering'] 
-print(f"Kz encoding ordering is {kz_encoding_str}.")
+print(f"Kz encoding ordering is {kz_ordering}.")
 
 for i in range(0, nkz):
     gzs.append(make_trapezoid(channel='z', area=phase_areas[i], duration=calc_duration(dummy_trap), system=system))
     gz_rewind.append(make_trapezoid(channel='z', area=phase_rewind_areas[i], duration=calc_duration(dummy_trap_rewind), system=system))
 
 # add the stack-type to the kz encoding string
-kz_encoding_str = kz_encoding_str + '_' +\
-    params['acquisition']['kz_encoding']['rotation_type']
+kz_encoding_str = kz_encoding_str + '_' + kspace_ordering
 
 # Set the delays
-
 TEd = []
 TE = [te_*1e-3 for te_ in TEs]
+
+if TE[0] == 0:
+    TE[0] = (rf.shape_dur - calc_rf_center(rf)[0] 
+                    + calc_duration(gzs[0]) 
+                    + gsp_x.delay)
+
 TEd.append(TE[0] - (rf.shape_dur - calc_rf_center(rf)[0] 
                     + calc_duration(gzs[0]) 
                     + gsp_x.delay))
@@ -312,9 +315,6 @@ else:
     params['acquisition']['spiral']['contrast'] = 'trueFISP'
 
 _, rf.shape_IDs = seq.register_rf_event(rf)
-
-# decide to loop kz on the 'outside' or 'inside.
-loop_type = params['acquisition']['kz_encoding']['rotation_type']
 
 # dummy scans
 for dumm_i in range(0,n_dummy):
@@ -433,7 +433,7 @@ if params['user_settings']['detailed_rep']:
 if params['user_settings']['write_seq']:
 
     import os
-    from utils.traj_utils import save_3Dtraj
+    from utils.traj_utils import save_3Dtraj, save_3Dtraj_2Donly
 
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, res*1e-3])
     seq.set_definition(key="SliceThickness", value=res*n_kz*1e-3)
@@ -458,9 +458,15 @@ if params['user_settings']['write_seq']:
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
 
     # save_traj_dcf(seq.signature_value, k_traj_adc, n_TRs, n_int, fov, res, ndiscard, params['user_settings']['show_plots'])
-    save_3Dtraj(seq.signature_value, k_traj_adc, 
+
+#     save_3Dtraj(seq.signature_value, k_traj_adc, 
+                # n_TRs, n_eco, n_int, params['acquisition']['spiral']['GA_angle'], 
+                # idx, fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'])
+    
+    save_3Dtraj_2Donly(seq.signature_value, k_traj_adc, 
                 n_TRs, n_eco, n_int, params['acquisition']['spiral']['GA_angle'], 
                 idx, fov, res, spiral_sys['adc_dwell'], ndiscard, params['user_settings']['show_plots'])
+
 
     print(f'Metadata file for {seq_filename} is saved as {seq.signature_value} in out_trajectory/.')
     

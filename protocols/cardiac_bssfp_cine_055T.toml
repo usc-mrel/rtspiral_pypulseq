@@ -20,6 +20,7 @@ GA_angle    = 111.25  # [deg]
 # custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
 # Note: custom_order assumes the number of interleaves, and does not work if it does not match.
 grad_rew_method = "ext_trap_area"
+M1_nulling = false 
 rewinder_time   = 0.8e-3
 
 [acquisition]
@@ -48,9 +49,8 @@ T2                = 58  # [ms]
 [[preparations]]
 type            = "tagging"
 enabled         = true 
-#tag_type      = "grid_REALTAG"
-tag_type        = "grid_CSPAMM"
-grid_tag_spacing = 2.0 #0.7   # [cm]
+tag_type      = "grid_REALTAG"
+grid_tag_spacing = 0.7   # [cm]
 include_in_filename = true
 # tag_type        = "radial"
 # num_tags = 10  # Number of taglines per half circle
