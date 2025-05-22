@@ -1,7 +1,7 @@
 """
 Python wrapper for the spiralgen and vds functions in the _spiralgen library.
 """
-from typing import Literal, Any
+from typing import Literal
 from _spiralgen.lib import bnispiralgen, calc_vds
 from _spiralgen import ffi
 import numpy as np
