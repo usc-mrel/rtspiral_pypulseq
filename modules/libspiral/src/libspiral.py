@@ -1,15 +1,16 @@
 """
 Python wrapper for the spiralgen and vds functions in the _spiralgen library.
 """
+from typing import Literal
 from _spiralgen.lib import bnispiralgen, calc_vds
 from _spiralgen import ffi
 import numpy as np
 import numpy.typing as npt
 import matplotlib.pyplot as plt
-from math import exp, log, ceil, sqrt
+from math import log, ceil, sqrt
 
-def calcgradinfo(g: npt.ArrayLike, T: float = 4e-6, k0: float = 0, R: float = 0.35, L: float = 0.0014, eta: float = 1.7857e-4) -> \
-tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
+def calcgradinfo(g: npt.NDArray[np.float64], T: float = 4e-6, k0: float = 0, R: float = 0.35, L: float = 0.0014, eta: float = 1.7857e-4) -> \
+tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
     """	Function calculates gradient information
 
 	Parameters
@@ -29,19 +30,19 @@ tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]
 
 	Returns
     -------
-    k : ArrayLike
+    k : NDArray
         k-space trajectory (m^(-1))
-    g : ArrayLike
+    g : NDArray
         gradient (mT/m)
-    s : ArrayLike
+    s : NDArray
         slew rate trajectory (T/m/s)
-    m1 : ArrayLike
+    m1 : NDArray
         first moment trajectory (s/m)
-    m2 : ArrayLike
+    m2 : NDArray
         second moment trajectory (s^2/m)
-    t : ArrayLike
+    t : NDArray
         vector of time points (s)
-    v : ArrayLike
+    v : NDArray
         voltage across coil.
 
 
@@ -131,9 +132,12 @@ def plotgradinfo(g, T: float = 4e-6):
 
     return fig
 
-def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float) -> npt.ArrayLike:
+def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float, 
+                     us_type: Literal['linear', 'quadratic', 'hanning'] = 'linear', us_factor: float = 1, us_transition: tuple[float, float] = (1, 1)) \
+      -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
     """ Given the system parameters, number of interleaves, FoV, resolution and Readout time, designs the variable density spiral.
     Calls spiral generation function bnispiralgen by James Pipe.
+    
     Parameters
     ----------
     sys : dict
@@ -149,17 +153,25 @@ def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float)
         Resolution target [m].
     Tread : float
         Maximum readout length [s].
+    us_type : str
+        Type of undersampling transition. Options are 'linear', 'quadratic', or 'hanning'.
+    us_factor : float
+        Undersampling factor. This is the final spacing in the spiral.
+    us_transition : tuple
+        Undersampling transition points. This is a tuple of two floats, (us_0, us_1), where us_0 is the first transition point and us_1 is the second transition point.
+        The spacing will be constant between us_0 and us_1, and then will transition to the final spacing.
+        
     Returns
     -------
-    k : ArrayLike
+    k : NDArray
         Designed trajectory [mm^-1].
-    g : ArrayLike
+    g : NDArray
         Designed grad waveform [mT/m].
-    grew : ArrayLike
+    grew : NDArray
         Designed rewinders [mT/m]
-    s : ArrayLike
+    s : NDArray
         Slew rate of the trajectory [T/m/s].
-    time : ArrayLike
+    time : NDArray
         Time axis [s].
     """
     #define GRAST    0.005 /* Desired gradient raster time (ms) */
@@ -225,14 +237,23 @@ def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float)
     #    0 < kr < us_0 : spacing = Nyquist distance 
     # us_0 < kr < us_1 : spacing increases to us_r (affected by ustype)
     # us_1 < kr < 1    : spacing = us_r
-    spparams[10] = 0                    # rate of change in undersampling
-                                        #  0 = linear
-                                        #  1 = quadratic
-                                        #  2 = hanning 
+    
+    # rate of change in undersampling
+    #  0 = linear
+    #  1 = quadratic
+    #  2 = hanning 
+    if us_type == 'linear':
+        spparams[10] = 0
+    elif us_type == 'quadratic':
+        spparams[10] = 1
+    elif us_type == 'hanning':
+        spparams[10] = 2
+    else:
+        raise ValueError('Invalid us_type. Choose from "linear", "quadratic", or "hanning".')       
 
-    spparams[11] = 1
-    spparams[12] = 1
-    spparams[13] = 1
+    spparams[11] = us_transition[0] # us_0
+    spparams[12] = us_transition[1] # us_1
+    spparams[13] = us_factor # us_r
 
     #define spDWELL    14
     #define spREADPTS  15
@@ -243,9 +264,6 @@ def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float)
     # For sloppy spirals, this lets us define periodicity in units of iteration loop time */
     # set this to zero if you do not want sloppy spirals */
     spparams[16] = 0
-
-
-
 
     # void bnispiralgen(float* spparams, int maxarray, float *gxarray, float *gyarray, float *gzarray, 
     #                  int *spgrad_na, int *spgrad_nb, int *spgrad_nc, int *spgrad_nd)
@@ -276,18 +294,11 @@ def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float)
 
     bnispiralgen(spparams, ngmax, xgrad_o, ygrad_o, zgrad_o, spgrad_na, spgrad_nb, spgrad_nc, spgrad_nd)
 
-
-
-
     Ngrad = spgrad_na[0]
     Ngrew = spgrad_nc[0]
     Gx = np.frombuffer(ffi.buffer(xgrad_o, 4*Ngrew), dtype=np.float32)
     Gy = np.frombuffer(ffi.buffer(ygrad_o, 4*Ngrew), dtype=np.float32)
     Gz = np.frombuffer(ffi.buffer(zgrad_o, 4*Ngrew), dtype=np.float32)
-
-    # Gx = Gx[0:-1:oversamp]
-    # Gy = Gy[0:-1:oversamp]
-    # Gz = Gz[0:-1:oversamp]
 
     g    = np.column_stack([Gx[:Ngrad], Gy[:Ngrad]]) # [mT/m]
     grew = np.column_stack([Gx[Ngrad:Ngrew], Gy[Ngrad:Ngrew]]) # [mT/m]
@@ -297,7 +308,7 @@ def spiralgen_design(sys: dict, Nint: int, fov: float, res: float, Tread: float)
     return k, g, grew, s, time
 
 
-def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike]:
+def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tuple[npt.NDArray, npt.NDArray, npt.NDArray, npt.NDArray]:
     """ Given the system parameters, number of interleaves, FoV, resolution and Readout time, designs the variable density spiral.
     Calls spiral generation function calc_vds by Brian Brian Hargreaves.
 
@@ -319,13 +330,13 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tup
         Maximum readout length [s].
     Returns
     -------
-    k : ArrayLike
+    k : NDArray
         Designed trajectory [mm^-1].
-    g : ArrayLike
+    g : NDArray
         Designed grad waveform [mT/m].
-    s : ArrayLike
+    s : NDArray
         Slew rate of the trajectory [T/m/s].
-    time : ArrayLike
+    time : NDArray
         Time axis [s].
     """
 
@@ -334,7 +345,7 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tup
     Td = sys['adc_dwell']
     oversamp = sys['os']
 
-    Tg = Td/oversamp;	# gradient rate.
+    Tg = Td/oversamp	# gradient rate.
 
     krmax = 5/res
     numfov = fov.__len__()
@@ -379,7 +390,7 @@ def vds_design(sys: dict, Nint: int, fov: list, res: float, Tread: float) -> tup
 
     return k, g, s, time
 
-def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, int]:
+def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.NDArray | None, npt.NDArray | None, npt.NDArray | None, int]:
     """vds_fixed_ro Sweeps vdsmex until N interleaves found that satisfies desired res.
 
     Parameters
@@ -395,11 +406,11 @@ def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.Ar
 
     Returns
     -------
-    k : ArrayLike
+    k : NDArray
         Designed k-space trajectory [m^-1]
-    g : ArrayLike
+    g : NDArray
         Designed gradient waveform [mT/m]
-    time : ArrayLike
+    time : NDArray
         Time axis [s]
     nint : int
         Number of interleaves that supports unalised FoV with the desired resolution.
@@ -409,6 +420,7 @@ def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.Ar
     krmax_target = 1/(2*res*1e-3) # m^-1
     krmax = 0
     nint = 0
+    k, g, time = None, None, None
     while krmax < krmax_target*tol:
         nint = nint+1
         k,g,_,time = vds_design(sys, nint, fov, res, Tread)
@@ -417,7 +429,7 @@ def vds_fixed_ro(sys: dict, fov: list, res: float, Tread: float) -> tuple[npt.Ar
     
     return k, g, time, nint
 
-def raster_to_grad(g: npt.ArrayLike, adc_dwell: float, grad_dwell: float) -> tuple[npt.ArrayLike, npt.ArrayLike]:
+def raster_to_grad(g: npt.NDArray, adc_dwell: float, grad_dwell: float) -> tuple[npt.ArrayLike, npt.ArrayLike]:
     t = (np.arange(1, g.shape[0]+1)-0.5)*adc_dwell
     t_grad = np.arange(0, np.round(g.shape[0]/(grad_dwell/adc_dwell)))*grad_dwell
     t = np.concatenate(([0], t))
