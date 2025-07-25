@@ -11,14 +11,15 @@ adc_dead_time     =  10e-6 # [s]
 contrast     = 'trueFISP'
 slew_ratio   = 0.8  # How much of the system slew rate to be used for spiral design.  
 ro_duration = 3e-3 # [s] Readout duration
-adc_dwell   = 1e-6 # [s]
+adc_dwell   = 2e-6 # [s]
 arm_ordering = 'ga' # 'linear', 'ga', 'tinyga', 'linear_custom'
 GA_steps    = 144  # 0 to disable GA
 GA_angle    = 112  # [deg]
 custom_order = [0,1,2,3,4,5,6,7,8,9] # Custom ordering of the arms determined by 0-indexed interleave number. Only enabled if arm_ordering='linear_custom'
 # Note: custom_order assumes the number of interleaves, and does not work if it does not match.
-grad_rew_method = 'm1_nayak' # 'gropt', 'ext_trap_area', 'exact_time', 'm1_nayak' - What method to use design spiral rewinders. GrOpt requires successfull compilation of the library.
-rewinder_time   = 1.0e-3 # [s] Exact rew time for 'grad_rew_method' = 'exact_time', max rew time for grad_rew_method = 'gropt'
+grad_rew_method = 'gropt' # 'gropt', 'ext_trap_area', 'exact_time', 'm1_nayak' - What method to use design spiral rewinders. GrOpt requires successfull compilation of the library.
+rewinder_time   = 0.8e-3 # [s] Exact rew time for 'grad_rew_method' = 'exact_time', max rew time for grad_rew_method = 'gropt'
+M1_nulling      = false  # If true, rewinder will be designed to null the M1 moment of the spiral readout.
 
 [acquisition]
 resolution      = 2       # [mm]
