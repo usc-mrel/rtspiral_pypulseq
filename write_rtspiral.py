@@ -59,10 +59,6 @@ Tread = params['spiral']['ro_duration'] # [s]
 
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
-# TODO: Does it improve everytime, or is this just a coincidence?
-# rot_ang = atan2(k[-1,1], k[-1,0]) - np.pi/8
-# rot_mtx = np.array([[np.cos(rot_ang), -np.sin(rot_ang)], [np.sin(rot_ang), np.cos(rot_ang)]])
-# g = np.dot(g, rot_mtx) # rotate the trajectory to the right orientation
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
@@ -112,13 +108,8 @@ adc = make_adc(num_samples, dwell=spiral_sys['adc_dwell'], delay=0, system=syste
 discard_delay_t = ceil((ndiscard*spiral_sys['adc_dwell']+GRT/2)/GRT)*GRT # [s] Time to delay grads.
 
 # Readout gradients
-gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0]*42.58e3, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
-gsp_x.first = 0
-gsp_x.last = 0
-
-gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1]*42.58e3, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
-gsp_y.first = 0
-gsp_y.last = 0
+gsp_x = make_arbitrary_grad(channel='x', waveform=g_grad[:,0]*42.58e3, first=0, last=0, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
+gsp_y = make_arbitrary_grad(channel='y', waveform=g_grad[:,1]*42.58e3, first=0, last=0, delay=discard_delay_t, system=system) # [mT/m] -> [Hz/m]
 
 # Set the Slice rewinder balance gradients delay
 gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
