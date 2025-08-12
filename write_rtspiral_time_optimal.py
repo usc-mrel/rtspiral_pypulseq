@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pypulseq import Opts
 from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make_delay, 
-                      make_arbitrary_grad, make_trapezoid, make_extended_trapezoid_area, 
+                      make_arbitrary_grad, make_trapezoid, 
                       calc_duration, calc_rf_center, 
                       rotate, add_gradients, make_label)
 from pypulseq.Sequence.sequence import Sequence
@@ -59,16 +59,16 @@ Tread = params['spiral']['ro_duration'] # [s]
 
 # Design the spiral trajectory
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
-
+if g is None:
+    raise RuntimeError("Failed to design spiral trajectory. Please check your parameters.")
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 # === design rewinder ===
-
-g_rewind_x, g_rewind_y, g_grad = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, \
-                                                slew_ratio=params['spiral']['slew_ratio'], \
-                                                grad_rew_method=params['spiral']['grad_rew_method'], \
+g_rewind_x, g_rewind_y, g_grad = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, # type: ignore
+                                                slew_ratio=params['spiral']['slew_ratio'], 
+                                                grad_rew_method=params['spiral']['grad_rew_method'], 
                                                 M1_nulling=params['spiral']['M1_nulling'], rotate_grads=True)
 
 # concatenate g and g_rewind, and plot.
@@ -86,7 +86,7 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
                                 time_bw_product=tbwp,
                                 return_gz=True,
-                                use='excitation', system=system)
+                                use='excitation', system=system) # type: ignore
 
 gzrr = copy.deepcopy(gzr)
 #gzrr.delay = 0 #gz.delay
@@ -189,14 +189,14 @@ if params['acquisition']['TR'] == 0:
     TRd = 0
     TR = calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc)
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        TR = TR + calc_duration(gz_crush)
+        TR = TR + calc_duration(gz_crush)  # type: ignore
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
     params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
     TRd = TR - (calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc))
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        TRd = TRd - calc_duration(gz_crush)
+        TRd = TRd - calc_duration(gz_crush)  # type: ignore
     assert TRd >= 0, "Required TR can not be achieved."
 
 TE_delay = make_delay(TEd)
@@ -264,7 +264,7 @@ for arm_i in range(0,n_TRs):
         seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
         seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        seq.add_block(gz_crush)
+        seq.add_block(gz_crush)  # type: ignore
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.

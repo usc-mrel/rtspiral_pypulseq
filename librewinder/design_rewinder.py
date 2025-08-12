@@ -79,6 +79,8 @@ def design_rewinder(g_grad, T_rew, system, slew_ratio=0.7, grad_rew_method='grop
 
     max_grad = system.max_grad / grad_scale
     max_slew = system.max_slew / slew_scale
+    g_rewind_x = np.zeros(0)
+    g_rewind_y = np.zeros(0)
 
     # Design rew with gropt
     if grad_rew_method == 'gropt':

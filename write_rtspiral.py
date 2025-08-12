@@ -61,17 +61,20 @@ Tread = params['spiral']['ro_duration'] # [s]
 k, g, t, n_int = vds_fixed_ro(spiral_sys, fov, res, Tread)
 print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
+if g is None:
+    raise RuntimeError("Failed to design spiral trajectory. Please check your parameters.")
+
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
 if params['spiral']['rotate_grads']:
-    g_rewind_x, g_rewind_y, g_grad = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, \
-                                             slew_ratio=params['spiral']['slew_ratio'], \
-                                             grad_rew_method=params['spiral']['grad_rew_method'], \
+    g_rewind_x, g_rewind_y, g_grad = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, # type: ignore
+                                             slew_ratio=params['spiral']['slew_ratio'],
+                                             grad_rew_method=params['spiral']['grad_rew_method'],
                                              M1_nulling=params['spiral']['M1_nulling'], rotate_grads=params['spiral']['rotate_grads'])
 else:
-    g_rewind_x, g_rewind_y = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, \
-                                             slew_ratio=params['spiral']['slew_ratio'], \
-                                             grad_rew_method=params['spiral']['grad_rew_method'], \
+    g_rewind_x, g_rewind_y = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, # type: ignore
+                                             slew_ratio=params['spiral']['slew_ratio'],
+                                             grad_rew_method=params['spiral']['grad_rew_method'],
                                              M1_nulling=params['spiral']['M1_nulling'])
 
 # concatenate g and g_rewind, and plot.
@@ -89,7 +92,7 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 slice_thickness=params['acquisition']['slice_thickness']*1e-3, # [mm] -> [m]
                                 time_bw_product=tbwp,
                                 return_gz=True,
-                                use='excitation', system=system)
+                                use='excitation', system=system) # type: ignore
 
 gzrr = copy.deepcopy(gzr)
 gzrr.delay = 0 #gz.delay
@@ -191,14 +194,14 @@ if params['acquisition']['TR'] == 0:
     TRd = 0
     TR = calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc)
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        TR = TR + calc_duration(gz_crush)
+        TR = TR + calc_duration(gz_crush) # pyright: ignore[reportPossiblyUnboundVariable]
     print(f'Min TR is set: {TR*1e3:.3f} ms.')
     params['acquisition']['TR'] = TR
 else:
     TR = params['acquisition']['TR']*1e-3
     TRd = TR - (calc_duration(rf, gzz) + TEd + calc_duration(gsp_xs[0], gsp_ys[0], adc))
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        TRd = TRd - calc_duration(gz_crush)
+        TRd = TRd - calc_duration(gz_crush) # pyright: ignore[reportPossiblyUnboundVariable]
     assert TRd >= 0, "Required TR can not be achieved."
 
 TE_delay = make_delay(TEd)
@@ -266,7 +269,7 @@ for arm_i in range(0,n_TRs):
         seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
         seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
     if params['spiral']['contrast'] in ('FLASH', 'FISP'):
-        seq.add_block(gz_crush)
+        seq.add_block(gz_crush) # pyright: ignore[reportPossiblyUnboundVariable]
     seq.add_block(TR_delay)
 
 # handle any end_preparation pulses.
