@@ -1,0 +1,9 @@
+"metafile_paths" = ["/server/home/yagiz/rtspiral_pypulseq/seq_meta"]
+"girf_file" = "GIRF/GIRF_20200221_Duyn_method_coil2.mat"
+
+[reconstruction]
+"apply_girf"         = false
+"num_iter"           = 300
+"fov_oversampling"   = 1       # Oversampling factor for FOV
+"gpu_device"         = 2
+"BART_TOOLBOX_PATH"  = "/server/home/btasdelen/bart"

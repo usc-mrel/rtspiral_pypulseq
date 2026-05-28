@@ -1,0 +1,77 @@
+# 26-03-15
+[system]
+max_grad          =    24 		# [mT/m] 		Free.Max -> 15	; Free.XL -> 20  [more like 16]  ; Aera -> 24
+max_slew          =    120		# [T/m/s]		Free.Max -> 40  ; Free.XL -> 120 [use max 100]   ; Aera -> 120
+grad_raster_time  =  10e-6 		# [s]
+rf_raster_time    =   1e-6 		# [s]
+rf_ringdown_time  =  10e-6 		# [s]
+rf_dead_time      = 200e-6 		# [s]
+adc_dead_time     =  10e-6 		# [s]
+
+# Note: 
+# in XYZ-TRA mode this is the direction mapping, not sure about the signs 
+# TRA: * x -> y [AP] ; * y -> x [LR] ; * z -> z [FH]
+# SAG: * x -> z [FH] ; * y -> y [AP] ; * z -> x [LR]
+# COR: * x -> z [HF] ; * y -> x [LR] ; * z -> y [AP]
+[Orientation]
+pulseq_ort_map 	= 'XYZ-TRA' 	# Pulseq Orientation Mappings: XYZ-TRA, XYZ-SAG, XYZ-COR
+disk_rot_axis 	= 'x' 			# 'x', 'y', 'z'
+rf_axis 		= 'y' 			# 'x', 'y', 'z'
+
+
+[acquisition]
+# Contrast
+contrast     	= 'trueFISP' 	# can be: trueFISP, FISP, or FLASH.
+# RF	
+excitation      = 'slr'  		# Options: 'sinc' only for now, update: SLR
+tbwp            = 6 			# TODO: 4 vs 6? 
+flip_angle      = 65     		# degrees 	
+rf_duration     = 1.2e-3   		# [s] 		# TODO: Check later!!
+
+# Dimensions
+resolution      =  2.5    		# [mm]
+fov             = [28.0, 20] 	# [cm] [Spiral FOV, Radial FOV]
+slab_thickness 	= 150     		# [mm] #TODO: Can I make this smaller??
+# Timing
+TR              = 0      		# [ms], 0 for min TR
+TE              = 0     		# [ms], list of echo times, 0 for min TE and single echo
+n_dummy         = 100     		# Number of dummy scans #TODO Catalyzation option for future
+
+
+[spiral]
+slew_ratio   	= 1.0 			
+grad_ratio   	= 0.99
+ro_duration  	= 3e-3 		# [s] Readout duration
+adc_dwell    	= 2e-6 		# [s]
+arm_ordering 	= 'linear-skip' # 'linear', 'ga', 'tiny_ga', 'linear_custom'
+sampling_disk   = 1 		# (0,1]. N spiral arms in a disk will be acquired. N = Nmax * sampling_disk. (1 means no undersampling, 0.5 means every other arm is acquired, etc.)
+disk_ordering 	= 'ga' 		# 'phylotaxis', 'ga', 'tiny_ga'
+hex_sampling 	= false  	# If true, additional rotation in [PE, SL] plane for hexagonal sampling.
+
+GA_steps     	= 144 		# Number of unique GA_steps, determines the duration of 1 repetition. Only enabled if 'ga' is selected.
+GA_angle     	= 137.51 	# [deg] Full spoke 137.51
+disk_GA_steps 	= 90 		# Number of unique GA_steps for disk ordering, determines the number of disks. Only enabled if 'ga' is selected.
+disk_GA_angle 	= 111.25 	# [deg] Half spoke 111.25
+rotate_grads 	= true
+
+inplane_os   	= 1.5 		# In-plane oversampling factor. Number of interleaves will be multiplied by this factor.
+disk_os 		= 1.0 		# Through-plane oversampling factor. Number of disks will be multiplied by this factor.
+grad_rew_method = 'gropt' 	# 'gropt', 'ext_trap_area', 'exact_time', 'm1_nayak' - What method to use design spiral rewinders. GrOpt requires successfull compilation of the library.
+rewinder_time   = 2e-3 		# [s] Exact rew time for 'grad_rew_method' = 'exact_time', max rew time for grad_rew_method = 'gropt'
+M1_nulling	  	= false 	# If true, rewinder will be designed to null the M1 moment of the spiral readout.
+
+[user_settings]
+seq_pp_folder 	= "seq_pp"
+seq_meta_folder = "seq_meta"
+write_seq    	= true
+filename_ext 	= 'inplane_sampling_factor_' 		# This will be attached to the filename
+show_plots   	= false 
+detailed_rep 	= true
+
+[acoustic_resonances]
+#frequencies = [700, 1164] 	 		# Aera
+#bandwidths  = [100, 250]   		# Aera
+frequencies = [685, 1120] # Free.XL
+bandwidths  = [100, 200] # Free.XL 
+# frequencies = [595, 1030]  # Free.max
+# bandwidths  = [130, 250]   # Free.max
