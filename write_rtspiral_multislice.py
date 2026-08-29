@@ -10,7 +10,6 @@ from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
 from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, spiralgen_design, calcgradinfo
-from libspiralutils import pts_to_waveform, design_rewinder_exact_time, round_up_to_GRT
 from librewinder.design_rewinder import design_rewinder
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -73,10 +72,16 @@ print(f'Number of interleaves for fully sampled trajectory: {n_int}.')
 
 t_grad, g_grad = raster_to_grad(g, spiral_sys['adc_dwell'], GRT)
 
-g_rewind_x, g_rewind_y = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, \
-                                         slew_ratio=params['spiral']['slew_ratio'], \
-                                         grad_rew_method=params['spiral']['grad_rew_method'], \
-                                         M1_nulling=params['spiral']['M1_nulling'])
+if params['spiral']['rotate_grads']:
+    g_rewind_x, g_rewind_y, g_grad = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, # type: ignore
+                                             slew_ratio=params['spiral']['slew_ratio'],
+                                             grad_rew_method=params['spiral']['grad_rew_method'],
+                                             M1_nulling=params['spiral']['M1_nulling'], rotate_grads=params['spiral']['rotate_grads'])
+else:
+    g_rewind_x, g_rewind_y = design_rewinder(g_grad, params['spiral']['rewinder_time'], system, # type: ignore
+                                             slew_ratio=params['spiral']['slew_ratio'],
+                                             grad_rew_method=params['spiral']['grad_rew_method'],
+                                             M1_nulling=params['spiral']['M1_nulling'])
 
 # concatenate g and g_rewind, and plot.
 g_grad = np.concatenate((g_grad, np.stack([g_rewind_x[0:], g_rewind_y[0:]]).T))
@@ -97,12 +102,26 @@ rf, gz, gzr = make_sinc_pulse(flip_angle=params['acquisition']['flip_angle']/180
                                 return_gz=True,
                                 use='excitation', system=system)
 
+"""
 gzrr = copy.deepcopy(gzr)
 gzrr.delay = 0 #gz.delay
+
+if 'partial_dephasing' in params['acquisition']:
+    dephasing = int(params['acquisition']['partial_dephasing'])
+    use_dephasing = True
+    moment_dephase = 1000*dephasing/params['acquisition']['slice_thickness']/(180*2)
+    # re-do the gzrr gradient.
+    gzrr = make_trapezoid(area=gzrr.area + moment_dephase, channel='z', system=system, max_grad=system.max_grad)
+
 rf.delay = calc_duration(gzrr) + gz.rise_time
 gz.delay = calc_duration(gzrr)
 gzr.delay = calc_duration(gzrr, gz)
 gzz = add_gradients([gzrr, gz, gzr], system=system)
+"""
+
+gzrr = copy.deepcopy(gzr)
+gzr.delay = calc_duration(gz)
+gzz = add_gradients([gz, gzr], system=system)
 
 # ADC
 ndiscard = 10 # Number of samples to discard from beginning
@@ -123,7 +142,7 @@ gsp_y.first = 0
 gsp_y.last = 0
 
 # Set the Slice rewinder balance gradients delay
-gzrr.delay = calc_duration(gsp_x, gsp_y, adc)
+gzrr.delay = calc_duration(gsp_x, gsp_y, adc) - (len(g_rewind_x)*GRT)
 
 # create a crusher gradient (only for FLASH)
 if params['spiral']['contrast'] == 'FLASH' or params['spiral']['contrast'] == 'FISP':
@@ -260,6 +279,7 @@ else:
 for slice_i in slice_range:
     rf.freq_offset = hz_per_thickness * slice_i
     _, rf.shape_IDs = seq.register_rf_event(rf)
+    seq.add_block(make_label('SLC', 'SET', slice_i + abs(min(slice_range))))
     for arm_i in range(0,n_TRs):
         curr_rf = copy.deepcopy(rf)
 
@@ -284,10 +304,11 @@ for slice_i in slice_range:
         seq.add_block(TE_delay)
         if params['spiral']['arm_ordering'] == 'ga':
             seq.add_block(make_label('LIN', 'SET', arm_i % params['spiral']['GA_steps']))
-            seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc) 
+            seq.add_block(make_label('REP', 'SET', arm_i // params['spiral']['GA_steps']))
+            seq.add_block(gsp_xs[arm_i % params['spiral']['GA_steps']], gsp_ys[arm_i % params['spiral']['GA_steps']], adc, gzrr) 
         else:
             seq.add_block(make_label('LIN', 'SET', arm_i % n_int))
-            seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc)
+            seq.add_block(gsp_xs[arm_i % n_int], gsp_ys[arm_i % n_int], adc, gzrr)
         if params['spiral']['contrast'] in ('FLASH', 'FISP'):
             seq.add_block(gz_crush)
         seq.add_block(TR_delay)
@@ -340,12 +361,18 @@ if params['user_settings']['detailed_rep']:
 if params['user_settings']['write_seq']:
 
     seq.set_definition(key="FOV", value=[fov[0]*1e-2, fov[0]*1e-2, params['acquisition']['slice_thickness']*1e-3])
+
     if 'num_slices' in params['acquisition']:
         slab_thickness = (params['acquisition']['slice_shift']*1e-3*int(params['acquisition']['num_slices'])) + (params['acquisition']['slice_thickness'] - params['acquisition']['slice_shift'])*1e-3
         print(f"Slab thickness: {slab_thickness}")
-        seq.set_definition(key="Slice_Thickness", value=slab_thickness)
+        # Siemens does not allow overlapping slices, so slice thickness is set to min(slice_thickness, slice_shift)
+        seq.set_definition(key="SliceThickness", value=min(params['acquisition']['slice_thickness']*1e-3, params['acquisition']['slice_shift']*1e-3))
+        # Similarly, slice gap is not allowed to be negative.
+        seq.set_definition(key='SliceGap', value=max((params['acquisition']['slice_shift']-params['acquisition']['slice_thickness'])*1e-3, 0.0))
+        seq.set_definition(key='SlicePositions', value=[i*params['acquisition']['slice_shift']*1e-3 for i in slice_range])
     else:
-        seq.set_definition(key="Slice_Thickness", value=params['acquisition']['slice_thickness']*1e-3)
+        seq.set_definition(key="SliceThickness", value=params['acquisition']['slice_thickness']*1e-3)
+        
     seq.set_definition(key="Name", value="sprssfp")
     seq.set_definition(key="TE", value=TE)
     seq.set_definition(key="TR", value=TR)
@@ -376,6 +403,8 @@ if params['user_settings']['write_seq']:
         'fov': fov,
         'spatial_resolution': res,
         'arm_ordering': params['spiral']['arm_ordering'],
+        'n_slices': int(params['acquisition']['num_slices']),
+        'slice_shift': params['acquisition']['slice_shift']
     }
 
     # truncate 
