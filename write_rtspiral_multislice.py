@@ -3,13 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pypulseq import Opts
 from pypulseq import (make_adc, make_sinc_pulse, make_digital_output_pulse, make_delay, 
-                      make_arbitrary_grad, make_trapezoid, make_extended_trapezoid_area, 
+                      make_arbitrary_grad, make_trapezoid, 
                       calc_duration, calc_rf_center, 
                       rotate, add_gradients, make_label)
 from pypulseq.Sequence.sequence import Sequence
 from utils import schedule_FA, load_params
 from utils.traj_utils import save_metadata
-from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, spiralgen_design, calcgradinfo
+from libspiral import vds_fixed_ro, plotgradinfo, raster_to_grad, calcgradinfo
 from librewinder.design_rewinder import design_rewinder
 from kernels.kernel_handle_preparations import kernel_handle_preparations, kernel_handle_end_preparations
 from math import ceil
@@ -21,8 +21,8 @@ import warnings
 
 # Cmd args
 parser = argparse.ArgumentParser(
-                    prog='Write2DRTSpiral',
-                    description='Generates a 2D real-time spiral Pulseq sequence for given parameters.')
+                    prog='Write2DSpiralMultislice',
+                    description='Generates a 2D multi-slice spiral Pulseq sequence for given parameters.')
 
 parser.add_argument('-c', '--config', type=str, default='config', help='Config file path.')
 
@@ -167,20 +167,19 @@ if params['spiral']['arm_ordering'] == 'linear':
         params['spiral']['GA_angle'] = 360/n_int
     n_TRs = n_int * params['acquisition']['repetitions']
 elif params['spiral']['arm_ordering'] == 'ga':
-    n_TRs = params['spiral']['GA_steps']
-    if (n_TRs%2) == 1 and (params['acquisition']['repetitions']%2) == 1:
+    n_int = params['spiral']['GA_steps']
+    if (n_int%2) == 1 and (params['acquisition']['repetitions']%2) == 1:
         warnings.warn(
                     '''
-                      ========================================
-                      Number of arms in the sequence is odd.
-                      This may create steady state artifacts during the imaging with multiple runs, due to RF phase not alternating properly.
+                      =================================================================================
+                      Number of arms in the sequence is odd. This may create steady state artifacts 
+                      during the imaging with multiple runs, due to RF phase not alternating properly.
                       To avoid this issue, set repetitions to an even number.
-                      ========================================
+                      =================================================================================
                       ''')
 
-    n_int = n_TRs
     ang = 0
-    for i in range(0, n_TRs):
+    for i in range(0, n_int):
         gsp_x_rot, gsp_y_rot = rotate(gsp_x, gsp_y, axis="z", angle=ang)
         gsp_xs.append(gsp_x_rot)
         gsp_ys.append(gsp_y_rot)
@@ -327,7 +326,7 @@ else:
 
 # Plot the sequence
 if params['user_settings']['show_plots']:
-    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms')
+    seq.plot(show_blocks=True, grad_disp='mT/m', plot_now=False, time_disp='ms', time_range=(0, 20*TR))
     k_traj_adc, k_traj, t_excitation, t_refocusing, t_adc = seq.calculate_kspace()
     plt.figure()
     plt.plot(k_traj[0,:], k_traj[1, :])
