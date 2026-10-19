@@ -6,13 +6,26 @@ import warnings
 import numpy as np
 from pypulseq import rotate
 
+def rotate_list(points, theta):
+    """
+    points: array-like with shape (L, 2)
+    theta: rotation angle in radians
+    """
+    points = np.asarray(points)
+
+    rotation = np.array([
+        [np.cos(theta), -np.sin(theta)],
+        [np.sin(theta),  np.cos(theta)],
+    ])
+
+    return points @ rotation.T
 
 def modified_golden_angles(
     base_ga,
     n_angles,
     aspect_ratio,
     fov_shape="rectangle",
-    angle_period=2*np.pi,
+    angle_period=np.pi,		# TODO changed from 2pi to pi
     input_unit="rad",
     output_unit="rad",
     angle_offset=0.0,
@@ -608,8 +621,9 @@ def get_3dmode_fullysampled_view_order(gsp_xyz, params):
 
 			if len(gsp_xyz_) >= nr_TRs_total:
 				return gsp_xyz_
-			
-			inplane_indices = np.roll(inplane_indices, shift=-1)	# circshift in-plane arm indices by 1 for each subsequent plane to achieve a more uniform sampling across planes
+
+		# Now the spiral stay same for each plane then changes	
+		inplane_indices = np.roll(inplane_indices, shift=-1)	# circshift in-plane arm indices by 1 for each subsequent plane to achieve a more uniform sampling across planes
 
 	return gsp_xyz_
 
